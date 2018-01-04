@@ -1,1 +1,2 @@
-## My Packages for ZeroBraneStudio
+# zbs-package
+Packages for ZeroBraneStudio
