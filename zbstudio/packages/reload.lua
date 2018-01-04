@@ -14,7 +14,6 @@ local function ReloadCurrentDocument()
     editor:EndUndoAction()
     if ok and status then
       editor:SetSavePoint()
-      document:SetModified(false)
     end
   end
 end
