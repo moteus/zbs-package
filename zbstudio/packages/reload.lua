@@ -1,13 +1,21 @@
--- required patch for `LoadFile` function to be able
--- keep Undo buffer intact
+local HOT_KEY = 'Ctrl-R'
 
-local function ReloadCurrentDocument(editor)
+local ID_RELOAD, ID_PREVIEW
+
+local function ReloadCurrentDocument()
+  local editor = ide:GetEditor()
   local document = ide:GetDocument(editor)
   local fileName = document and document:GetFilePath()
   if fileName then
     editor:BeginUndoAction()
-    LoadFile(fileName, editor, true, nil, true)
+    editor.EmptyUndoBuffer = function()end
+    local ok, status = pcall(ide.LoadFile, ide, fileName, editor, true)
+    editor.EmptyUndoBuffer = nil
     editor:EndUndoAction()
+    if ok and status then
+      editor:SetSavePoint()
+      document:SetModified(false)
+    end
   end
 end
 
@@ -15,19 +23,25 @@ return {
   name = "Reload document",
   description = "Reload current document from file and discard all changes",
   author = "Alexey Melnichuk",
-  version = 0.1,
+  version = 0.2,
   dependencies = "1.7",
 
-  onEditorKeyDown = function(self, editor, event)
-      local key = event:GetKeyCode()
-      local mod = event:GetModifiers()
+  onRegister = function()
+    --! @todo add menu item
+    --! @todo get shortcut key from config
+    ID_PREVIEW = ide:GetHotKey(HOT_KEY)
+    ID_RELOAD  = ide:SetHotKey(ReloadCurrentDocument, HOT_KEY)
+  end,
 
-      -- Ctrl+R
-      if (key == string.byte('r') or key == string.byte('R')) and
-          (mod == wx.wxMOD_CONTROL)
-      then
-          ReloadCurrentDocument(editor)
-          return false
+  onUnRegister = function()
+    if ID_RELOAD == ide:GetHotKey(HOT_KEY) then
+      if ID_PREVIEW then
+        ide:SetHotKey(ID_PREVIEW, HOT_KEY)
+      else
+        --! @fixme ZBS 1.70 seems do not accept remove hot keys
+        ide:SetHotKey(function()end, HOT_KEY)
       end
+    end
+    ID_RELOAD, ID_PREVIEW = nil
   end,
 }
