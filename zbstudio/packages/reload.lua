@@ -1,10 +1,12 @@
+-- required patch for `LoadFile` function to be able
+-- keep Undo buffer intact
+
 local function ReloadCurrentDocument(editor)
   local document = ide:GetDocument(editor)
   local fileName = document and document:GetFilePath()
   if fileName then
-    --! @fixme Undo does not work
     editor:BeginUndoAction()
-    LoadFile(fileName, editor, true)
+    LoadFile(fileName, editor, true, nil, true)
     editor:EndUndoAction()
   end
 end
