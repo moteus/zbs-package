@@ -581,15 +581,121 @@ local function HasMoreThanOne(editor, value, length, flag, style)
     end
 end
 
+local function RangeExists(positions, a, b)
+    for i = 1, #positions do
+        local range = positions[i]
+        if range[1] == a and range[2] == b then
+            return true
+        end
+    end
+end
+
+local function AppendSelectionArray(editor, positions)
+    local selection_pos_start, selection_pos_end = editor:GetSelection()
+    if selection_pos_start == selection_pos_end then return positions end
+
+    if RangeExists(positions.ranges, selection_pos_start, selection_pos_end) then
+        return positions
+    end
+    table.insert(positions.ranges, {selection_pos_start, selection_pos_end})
+
+    if not editor:SelectionIsRectangle() then
+        table.insert(positions,{
+            selection_pos_start, selection_pos_end
+        })
+        return positions
+    end
+
+    local selection_line_start = editor:LineFromPosition(selection_pos_start)
+    local selection_line_end   = editor:LineFromPosition(selection_pos_end)
+    for line = selection_line_start, selection_line_end do
+        local selection_line_pos_start = editor:GetLineSelStartPosition(line)
+        local selection_line_pos_end   = editor:GetLineSelEndPosition(line)
+        table.insert(positions, {selection_line_pos_start, selection_line_pos_end})
+    end
+    return positions
+end
+
+local function GetAllSelections(editor)
+    local positions = {ranges = {}}
+    local current_selection = editor:GetMainSelection()
+    for i = 0, editor:GetSelections() - 1 do
+        editor:SetMainSelection(i)
+        AppendSelectionArray(editor, positions)
+    end
+    editor:SetMainSelection(current_selection)
+
+    table.sort(positions, function(lhs, rhs)
+        if lhs[1] == rhs[1] then
+            return lhs[2] < rhs[2]
+        end
+        return lhs[1] < rhs[1] 
+    end)
+
+    return positions
+end
+
+local function iSelection(editor)
+    local i = 0
+    return function(p)
+        i = i + 1
+        local r = p[i]
+        if r then return r[1], r[2] end
+    end, GetAllSelections(editor)
+end
+
 local function ClearFindMarks()
-    editor = ide:GetEditor()
+    local editor = ide:GetEditor()
     if not editor then return end
-    EditorClearMarks(editor)
-    if bookmark then editor:MarkerDeleteAll(bookmark) end
+
+    local selected = false
+
+    for selection_pos_start, selection_pos_end in iSelection(editor) do
+        selected = true
+        local selection_legth = selection_pos_end - selection_pos_start
+        EditorClearMarks(editor, nil, selection_pos_start, selection_legth)
+        if bookmark then
+            local selection_line_start = editor:LineFromPosition(selection_pos_start)
+            local selection_line_end   = editor:LineFromPosition(selection_pos_end)
+            for line = selection_line_start, selection_line_end do
+                editor:MarkerDelete(line, bookmark)
+            end
+        end
+    end
+
+    if not selected then
+        EditorClearMarks(editor)
+        if bookmark then editor:MarkerDeleteAll(bookmark) end
+    end
+
     current_marker = 1
 end
 
+local function MarkSelected(editor, indicator, unmark)
+  if type(indicator) == 'string' then
+    indicator = ide:GetIndicator()
+  end
+
+  if type(indicator) ~= 'number' then
+    return
+  end
+
+  for selection_pos_start, selection_pos_end in iSelection(editor) do
+    local selection_legth = selection_pos_end - selection_pos_start
+    Editor.MarkText(editor, selection_pos_start, selection_legth, indicator)
+  end
+end
+
+local function CallMarkSelected()
+    local editor = ide:GetEditor()
+    local indicator = INSTALLED_MARKERS[1]
+    local style     = FIND_MARKERS[1]
+    Editor.ConfigureIndicator(editor, indicator, style)
+    MarkSelected(editor, indicator)
+end
+
 local CLEAR_HOT_KEY = HotKeyToggle:new'Ctrl-Alt-C'
+local MARK_HOT_KEY  = HotKeyToggle:new'Ctrl-Alt-S'
 
 Package.onRegister = function(package)
     local config = package:GetConfig()
@@ -642,9 +748,11 @@ Package.onRegister = function(package)
     if bookmark == true then bookmark = FINDTEXT.bookmarks end
 
     CLEAR_HOT_KEY:set(ClearFindMarks)
+    MARK_HOT_KEY:set(CallMarkSelected)
 end
 
 Package.onUnRegister = function()
+    MARK_HOT_KEY:unset()
     CLEAR_HOT_KEY:unset()
 
     ide:RemoveIndicator(HIGHLIGHT_MARKER)
