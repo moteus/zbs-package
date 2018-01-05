@@ -368,7 +368,7 @@ local function IsReservedWord(editor, pos, text)
         local style = Editor.GetStyleAt(editor, pos)
         local convert = editor.spec and editor.spec.lexerstyleconvert
         for _, reserved_style in ipairs(reserved.style) do
-            if (reserved_style) == 'number' then
+            if type(reserved_style) == 'number' then
                 if style == reserved_style then return true end
             elseif convert then
                 if in_array(convert[reserved_style], style) then
