@@ -123,6 +123,7 @@ function Editor.GetSelText(editor)
 
   if selection_pos_start ~= selection_pos_end then
     if selection.is_rectangle then
+      local EOL = Editor.GetEOL(editor)
       local selected, not_empty = {}, false
       for line = selection_line_start, selection_line_end do
         local selection_line_pos_start = editor:GetLineSelStartPosition(line)
@@ -204,6 +205,10 @@ function Editor.iFindText(editor, text, flags, pos, finish, style)
             end
         end
     end
+end
+
+function Editor.HasFocus(editor)
+    return editor == ide:GetEditorWithFocus() and editor
 end
 
 function Editor.GetDocument(editor)
@@ -314,6 +319,38 @@ function Editor.ConfigureIndicator(editor, indicator, params)
     if oalpha then
         editor:IndicatorSetOutlineAlpha(indicator, oalpha)
     end
+end
+
+end
+--------------------------------------------------------------------
+
+--------------------------------------------------------------------
+local HotKeyToggle = {} do
+HotKeyToggle.__index = HotKeyToggle
+
+function HotKeyToggle:new(key)
+    local o = setmetatable({key = key}, self)
+    return o
+end
+
+function HotKeyToggle:set(handler)
+    assert(self.id == nil)
+    self.prev = ide:GetHotKey(self.key)
+    self.id = ide:SetHotKey(handler, self.key)
+    return self
+end
+
+function HotKeyToggle:unset()
+    assert(self.id ~= nil)
+    if self.id == ide:GetHotKey(self.key) then
+        if self.prev then
+            ide:SetHotKey(self.prev, self.key)
+        else
+            --! @todo properly remove handler
+            ide:SetHotKey(function()end, self.key)
+        end
+    end
+    self.prev, self.id = nil
 end
 
 end
@@ -673,7 +710,8 @@ end
 ---------------------------------------------
 -- Обработка нажатия на Ctrl+Q
 local function xComment()
-    local editor = ide:GetEditor()
+    local editor = Editor.HasFocus(ide:GetEditor())
+    if not editor then return end
 
     ConfigureState(editor)
 
@@ -724,21 +762,18 @@ local function xComment()
     end
 end
 
-Package.onRegister = function(package) end
+local HOT_KEY
 
-Package.onUnRegister = function() end
+Package.onRegister = function(package)
+    local _, key = ide:GetHotKey(ID_COMMENT or ID.COMMENT)
+    if not key or #key == 0 then key = 'Ctrl+Q'end
+    HOT_KEY = HotKeyToggle:new(key)
+        :set(xComment)
+end
 
-Package.onEditorKeyDown = function(self, editor, event)
-    local key = event:GetKeyCode()
-    local mod = event:GetModifiers()
-
-    -- Ctrl+Q
-    if (key == string.byte('q') or key == string.byte('Q')) and
-        (mod == wx.wxMOD_CONTROL)
-    then
-        xComment()
-        return false
-    end
+Package.onUnRegister = function()
+    HOT_KEY:unset()
+    HOT_KEY = nil
 end
 
 return Package

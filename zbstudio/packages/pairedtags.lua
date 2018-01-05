@@ -114,6 +114,7 @@ function Editor.GetSelText(editor)
 
   if selection_pos_start ~= selection_pos_end then
     if selection.is_rectangle then
+      local EOL = Editor.GetEOL(editor)
       local selected, not_empty = {}, false
       for line = selection_line_start, selection_line_end do
         local selection_line_pos_start = editor:GetLineSelStartPosition(line)
@@ -195,6 +196,10 @@ function Editor.iFindText(editor, text, flags, pos, finish, style)
             end
         end
     end
+end
+
+function Editor.HasFocus(editor)
+    return editor == ide:GetEditorWithFocus() and editor
 end
 
 function Editor.GetDocument(editor)
@@ -305,6 +310,38 @@ function Editor.ConfigureIndicator(editor, indicator, params)
     if oalpha then
         editor:IndicatorSetOutlineAlpha(indicator, oalpha)
     end
+end
+
+end
+--------------------------------------------------------------------
+
+--------------------------------------------------------------------
+local HotKeyToggle = {} do
+HotKeyToggle.__index = HotKeyToggle
+
+function HotKeyToggle:new(key)
+    local o = setmetatable({key = key}, self)
+    return o
+end
+
+function HotKeyToggle:set(handler)
+    assert(self.id == nil)
+    self.prev = ide:GetHotKey(self.key)
+    self.id = ide:SetHotKey(handler, self.key)
+    return self
+end
+
+function HotKeyToggle:unset()
+    assert(self.id ~= nil)
+    if self.id == ide:GetHotKey(self.key) then
+        if self.prev then
+            ide:SetHotKey(self.prev, self.key)
+        else
+            --! @todo properly remove handler
+            ide:SetHotKey(function()end, self.key)
+        end
+    end
+    self.prev, self.id = nil
 end
 
 end
@@ -487,6 +524,26 @@ local function PairedTagsFinder(editor)
     end
 end
 
+local function wrap(fn) return function()
+    local editor = Editor.HasFocus(ide:GetEditor())
+    if not editor then return end
+
+    local lexer = editor.spec and editor.spec.lexer or editor:GetLexer()
+    if not LEXERS[lexer] then return end
+
+    return fn(editor)
+end end
+
+local function K(...) return HotKeyToggle:new(...) end
+
+local HotKeys = {
+    copy   = K'Alt+C',
+    paste  = K'Alt+V',
+    delete = K'Alt+D',
+    pgoto  = K'Alt+G',
+    select = K'Alt+S',
+}
+
 Package.onRegister = function(package)
     local config = package:GetConfig()
 
@@ -497,6 +554,12 @@ Package.onRegister = function(package)
 
     blue_indic = ide:AddIndicator('pairedtags.blue')
     red_indic  = ide:AddIndicator('pairedtags.red')
+
+    HotKeys.copy   :set(wrap(CopyTags))
+    HotKeys.paste  :set(wrap(PasteTags))
+    HotKeys.delete :set(wrap(DeleteTags))
+    HotKeys.pgoto  :set(wrap(GotoPairedTag))
+    HotKeys.select :set(wrap(SelectWithTags))
 end
 
 Package.onUnRegister = function()
@@ -504,6 +567,9 @@ Package.onUnRegister = function()
     ide:RemoveIndicator(red_indic)
     blue_indic, red_indic = nil
     BLUE_STYLE, RED_STYLE = nil
+    for _, key in pairs(HotKeys) do
+        key:unset()
+    end
 end
 
 Package.onEditorUpdateUI = function(self, editor, event)
@@ -520,38 +586,6 @@ Package.onIdle = function()
     local editor = updateneeded
     updateneeded = false
     PairedTagsFinder(editor)
-end
-
-Package.onEditorKeyDown = function(self, editor, event)
-    local lexer = editor.spec and editor.spec.lexer or editor:GetLexer()
-    if LEXERS[lexer] then
-        local key = event:GetKeyCode()
-        local mod = event:GetModifiers()
-        if mod == wx.wxMOD_ALT then
-            if key == string.byte('c') or key == string.byte('C') then
-                CopyTags(editor)
-                return false
-            end
-            if key == string.byte('v') or key == string.byte('V') then
-                PasteTags(editor)
-                return false
-            end
-            if key == string.byte('d') or key == string.byte('D') then
-                DeleteTags(editor)
-                return false
-            end
-            if key == string.byte('b') or key == string.byte('B') then
-                GotoPairedTag(editor)
-                return false
-            end
-            if key == string.byte('s') or key == string.byte('S') then
-                SelectWithTags(editor)
-                return false
-            end
-        end
-    end
-
-    return true
 end
 
 return Package

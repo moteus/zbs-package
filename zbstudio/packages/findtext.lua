@@ -172,6 +172,7 @@ function Editor.GetSelText(editor)
 
   if selection_pos_start ~= selection_pos_end then
     if selection.is_rectangle then
+      local EOL = Editor.GetEOL(editor)
       local selected, not_empty = {}, false
       for line = selection_line_start, selection_line_end do
         local selection_line_pos_start = editor:GetLineSelStartPosition(line)
@@ -253,6 +254,10 @@ function Editor.iFindText(editor, text, flags, pos, finish, style)
             end
         end
     end
+end
+
+function Editor.HasFocus(editor)
+    return editor == ide:GetEditorWithFocus() and editor
 end
 
 function Editor.GetDocument(editor)
@@ -363,6 +368,38 @@ function Editor.ConfigureIndicator(editor, indicator, params)
     if oalpha then
         editor:IndicatorSetOutlineAlpha(indicator, oalpha)
     end
+end
+
+end
+--------------------------------------------------------------------
+
+--------------------------------------------------------------------
+local HotKeyToggle = {} do
+HotKeyToggle.__index = HotKeyToggle
+
+function HotKeyToggle:new(key)
+    local o = setmetatable({key = key}, self)
+    return o
+end
+
+function HotKeyToggle:set(handler)
+    assert(self.id == nil)
+    self.prev = ide:GetHotKey(self.key)
+    self.id = ide:SetHotKey(handler, self.key)
+    return self
+end
+
+function HotKeyToggle:unset()
+    assert(self.id ~= nil)
+    if self.id == ide:GetHotKey(self.key) then
+        if self.prev then
+            ide:SetHotKey(self.prev, self.key)
+        else
+            --! @todo properly remove handler
+            ide:SetHotKey(function()end, self.key)
+        end
+    end
+    self.prev, self.id = nil
 end
 
 end
@@ -544,7 +581,15 @@ local function HasMoreThanOne(editor, value, length, flag, style)
     end
 end
 
-local CAS = wx.wxMOD_ALT + wx.wxMOD_CONTROL + wx.wxMOD_SHIFT
+local function ClearFindMarks()
+    editor = ide:GetEditor()
+    if not editor then return end
+    EditorClearMarks(editor)
+    if bookmark then editor:MarkerDeleteAll(bookmark) end
+    current_marker = 1
+end
+
+local CLEAR_HOT_KEY = HotKeyToggle:new'Ctrl-Alt-C'
 
 Package.onRegister = function(package)
     local config = package:GetConfig()
@@ -595,9 +640,13 @@ Package.onRegister = function(package)
     isOutput   = findtext.output
     isTutorial = findtext.tutorial
     if bookmark == true then bookmark = FINDTEXT.bookmarks end
+
+    CLEAR_HOT_KEY:set(ClearFindMarks)
 end
 
 Package.onUnRegister = function()
+    CLEAR_HOT_KEY:unset()
+
     ide:RemoveIndicator(HIGHLIGHT_MARKER)
     for _, indicator in ipairs(INSTALLED_MARKERS) do
         ide:RemoveIndicator(indicator)
@@ -658,21 +707,6 @@ Package.onIdle = function(self)
 
     if is_selected then
         ide:SetStatusFor(("Found %d instance(s)."):format(count), 5)
-    end
-end
-
-Package.onEditorKeyDown = function(self, editor, event)
-    local key = event:GetKeyCode()
-    local mod = bit.band(event:GetModifiers(), CAS)
-
-    -- Ctrl+Alt+C
-    if(key == string.byte('c') or key == string.byte('C')) and
-        (mod == wx.wxMOD_ALT + wx.wxMOD_CONTROL)
-    then
-        EditorClearMarks(editor)
-        if bookmark then editor:MarkerDeleteAll(bookmark) end
-        current_marker = 1
-        return false
     end
 end
 
