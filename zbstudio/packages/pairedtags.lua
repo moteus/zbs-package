@@ -53,6 +53,14 @@ local function append(t, v)
     return t
 end
 
+local function split_first(str, sep, plain)
+  local e, e2 = string.find(str, sep, nil, plain)
+  if e then
+    return string.sub(str, 1, e - 1), string.sub(str, e2 + 1)
+  end
+  return str
+end
+
 local SC_EOL_CRLF = 0
 local SC_EOL_CR   = 1
 local SC_EOL_LF   = 2
@@ -233,13 +241,14 @@ local STYLE_CACHE, STYLE_NAMES = {}, {
     squiggle     = wxstc.wxSTC_INDIC_SQUIGGLE,
 }
 
--- Convert sting like #<HEX_COLOR>,style,@alpha
+-- Convert sting like #<HEX_COLOR>,style[:alpha],@alpha,[U|u]
 function Editor.DecodeStyleString(s)
-    local color, style, alpha
+    local color, style, alpha, under, oalpha
     if s then
         local cached = STYLE_CACHE[s]
         if cached then
-            return cached[1], cached[2],cached[3]
+            return cached[1], cached[2], cached[3],
+                cached[4], cached[5]
         end
         for param in string.gmatch(s, '[^,]+') do
             if not color then
@@ -263,9 +272,13 @@ function Editor.DecodeStyleString(s)
                 end
             elseif string.sub(param, 1, 1) == '@' then
                 alpha = tonumber((string.sub(param, 2)))
+            elseif string.sub(param, 1, 1) == 'u' or string.sub(param, 1, 1) == 'U' then
+                under = (string.sub(param, 1, 1) == 'U')
             elseif #param > 0 then
-                style = tonumber(param) or STYLE_NAMES[param]
-                    or wxstc['wxSTC_INDIC_' .. param]
+                local name, alpha = split_first(param, ':', true)
+                style = tonumber(name) or STYLE_NAMES[name]
+                    or wxstc['wxSTC_INDIC_' .. name]
+                oalpha = tonumber(alpha)
             end
         end
     end
@@ -275,17 +288,23 @@ function Editor.DecodeStyleString(s)
     style = style or STYLE_NAMES['roundbox']
 
     if s then
-        STYLE_CACHE[s] = {color, style, alpha}
+        STYLE_CACHE[s] = {color, style, alpha, under, oalpha}
     end
 
-    return color, style, alpha
+    return color, style, alpha, under, oalpha
 end
 
 function Editor.ConfigureIndicator(editor, indicator, params)
-    local color, style, alpha = Editor.DecodeStyleString(params)
+    local color, style, alpha, under, oalpha = Editor.DecodeStyleString(params)
     editor:IndicatorSetForeground(indicator, color)
     editor:IndicatorSetStyle     (indicator, style)
     editor:IndicatorSetAlpha     (indicator, alpha)
+    if under ~= nil then
+        editor:IndicatorSetUnder (indicator, not not under)
+    end
+    if oalpha then
+        editor:IndicatorSetOutlineAlpha(indicator, oalpha)
+    end
 end
 
 end
