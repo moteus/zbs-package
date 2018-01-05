@@ -4,6 +4,9 @@ local ID_RELOAD, ID_PREVIEW
 
 local function ReloadCurrentDocument()
   local editor = ide:GetEditor()
+  if editor ~= ide:GetEditorWithFocus() then
+    return
+  end
   local document = ide:GetDocument(editor)
   local fileName = document and document:GetFilePath()
   if fileName then
