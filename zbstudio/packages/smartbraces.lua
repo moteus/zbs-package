@@ -172,27 +172,12 @@ function Editor.GetSelText(editor)
 end
 
 function Editor.GetSymbolAt(editor, pos)
-    local line = editor:LineFromPosition(pos)
-    local eol_line = editor:GetLineEndPosition(line)
-    if eol_line == pos then
-        local next_pos = editor:PositionFromLine(line+1)
-        return editor:GetTextRange(pos, next_pos)
-    end
-
-    local col = editor:GetColumn(pos)
-    for col = col+1, editor:GetColumn(eol_line) do
-        local next_pos = editor:FindColumn(line, col)
-        if next_pos ~= pos then
-            return editor:GetTextRange(pos, next_pos)
-        end
-    end
-
-    return ''
+    return editor:GetTextRange(pos, editor:PositionAfter(pos))
 end
 
 function Editor.GetStyleAt(editor, pos)
-    --! @check Found this in ZBS source code
-    return bit.band(31, editor:GetStyleAt(pos))
+    local mask = bit.lshift(1, editor:GetStyleBitsNeeded()) - 1
+    return bit.band(mask, editor:GetStyleAt(pos))
 end
 
 function Editor.FindText(editor, text, flags, start, finish)
@@ -352,6 +337,14 @@ function Editor.ConfigureIndicator(editor, indicator, params)
     end
 end
 
+function Editor.SetSel(editor, nStart, nEnd)
+    if nEnd < 0 then nEnd = editor:GetLength() end
+    if nStart < 0 then nStart = nEnd end
+
+    editor:GotoPos(nEnd)
+    editor:SetAnchor(nStart)
+end
+
 end
 --------------------------------------------------------------------
 
@@ -474,6 +467,7 @@ local function BracesBalanced (s, bracebegin, braceend)
 end -- BracesBalanced
 
 local function BlockBraces( bracebegin, braceend )
+  local pos = editor:GetCurrentPos()
   local text, selbegin, selend = Editor.GetSelText(editor)
   local b, e   = string.find( text, "^%s*"..StringToPattern(bracebegin) )
   local b2, e2 = string.find( text, StringToPattern(braceend).."%s*$" )
@@ -483,12 +477,17 @@ local function BlockBraces( bracebegin, braceend )
   if b and b2 and BracesBalanced(string.sub(text, e+1, b2-1), bracebegin, braceend) then
     text = string.sub(text, e+1, b2-1 )
     editor:ReplaceSelection(text..add)
-    editor:SetSelection( selbegin, selbegin + #( text..add ) )
+    selend = selbegin + #( text..add )
   else
     editor:InsertText( selend - #add, braceend )
     editor:InsertText( selbegin, bracebegin )
-    editor:SetSelection( selbegin, selend + #( bracebegin..braceend ) )
+    selend = selend + #( bracebegin..braceend )
   end
+  if pos == selbegin then
+    selbegin, selend = selend, selbegin
+  end
+  Editor.SetSel(editor, selbegin, selend)
+
   editor:EndUndoAction()
 
   return true

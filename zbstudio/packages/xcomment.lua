@@ -141,27 +141,12 @@ function Editor.GetSelText(editor)
 end
 
 function Editor.GetSymbolAt(editor, pos)
-    local line = editor:LineFromPosition(pos)
-    local eol_line = editor:GetLineEndPosition(line)
-    if eol_line == pos then
-        local next_pos = editor:PositionFromLine(line+1)
-        return editor:GetTextRange(pos, next_pos)
-    end
-
-    local col = editor:GetColumn(pos)
-    for col = col+1, editor:GetColumn(eol_line) do
-        local next_pos = editor:FindColumn(line, col)
-        if next_pos ~= pos then
-            return editor:GetTextRange(pos, next_pos)
-        end
-    end
-
-    return ''
+    return editor:GetTextRange(pos, editor:PositionAfter(pos))
 end
 
 function Editor.GetStyleAt(editor, pos)
-    --! @check Found this in ZBS source code
-    return bit.band(31, editor:GetStyleAt(pos))
+    local mask = bit.lshift(1, editor:GetStyleBitsNeeded()) - 1
+    return bit.band(mask, editor:GetStyleAt(pos))
 end
 
 function Editor.FindText(editor, text, flags, start, finish)
@@ -319,6 +304,14 @@ function Editor.ConfigureIndicator(editor, indicator, params)
     if oalpha then
         editor:IndicatorSetOutlineAlpha(indicator, oalpha)
     end
+end
+
+function Editor.SetSel(editor, nStart, nEnd)
+    if nEnd < 0 then nEnd = editor:GetLength() end
+    if nStart < 0 then nStart = nEnd end
+
+    editor:GotoPos(nEnd)
+    editor:SetAnchor(nStart)
 end
 
 end
@@ -556,19 +549,15 @@ local function BlockComment(editor, block)
     end
     text_comment = table.concat(text_comment)
 
+    local cursor_at_begin = (block.bstart == editor:GetCurrentPos())
+
     editor:BeginUndoAction()
     editor:SetSelection(block.bstart, block.bend)
     editor:ReplaceSelection(text_comment)
-    editor:SetSelection(block.bstart, editor:PositionFromLine(block.last_line))
 
-    local set_pos = editor:PositionFromLine(cur_line)
-    if set_pos ~= editor:GetCurrentPos() then
-        -- it is possible that cursor was at the beggining of block
-        -- (when select from down to top). But SetSelection moves it
-        -- at last line. I see no way how to fix it. GotoPos removes
-        -- selection and pass args in backwards order does not work
-        -- editor:GotoPos(editor:PositionFromLine(cur_line))
-    end
+    local ancor, caret = block.bstart, editor:PositionFromLine(block.last_line)
+    if cursor_at_begin then ancor, caret = caret, ancor end
+    Editor.SetSel(editor, ancor, caret)
 
     editor:EndUndoAction()
 end
@@ -592,12 +581,16 @@ local function BlockUnComment(editor, block)
     end
     text_uncomment = table.concat(text_uncomment)
 
+    local cursor_at_begin = (block.bstart == editor:GetCurrentPos())
+
     editor:BeginUndoAction()
     editor:SetSelection(block.bstart, block.bend)
     editor:ReplaceSelection(text_uncomment)
-    local liast_line_pos = editor:PositionFromLine(block.last_line)
-    editor:GotoPos(liast_line_pos)
-    editor:SetSelection(block.bstart, liast_line_pos)
+
+    local ancor, caret = block.bstart, editor:PositionFromLine(block.last_line)
+    if cursor_at_begin then ancor, caret = caret, ancor end
+    Editor.SetSel(editor, ancor, caret)
+
     editor:EndUndoAction()
 end
 
@@ -619,9 +612,11 @@ local function StreamComment(editor, block, comment_stream_start, comment_stream
 
     local text_comment = comment_stream_start..block.text..comment_stream_end
     local delta = #text_comment - #block.text
+    local ancor, caret = block.bstart, block.bend + delta
+    if block.bstart == editor:GetCurrentPos() then ancor, caret = caret, ancor end
     editor:BeginUndoAction()
     editor:ReplaceSelection(text_comment)
-    editor:SetSelection(block.bstart, block.bend + delta)
+    Editor.SetSel(editor, ancor, caret)
     editor:EndUndoAction()
 end
 
@@ -632,9 +627,11 @@ local function StreamUnComment(editor, block, PatternStream)
 
     local text_uncomment = string.gsub(block.text, PatternStream, "%1", 1)
     local delta = #block.text - #text_uncomment
+    local ancor, caret = block.bstart, block.bend - delta
+    if block.bstart == editor:GetCurrentPos() then ancor, caret = caret, ancor end
     editor:BeginUndoAction()
     editor:ReplaceSelection(text_uncomment)
-    editor:SetSelection(block.bstart, block.bend - delta)
+    Editor.SetSel(editor, ancor, caret)
     editor:EndUndoAction()
 end
 
