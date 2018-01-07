@@ -478,6 +478,8 @@ end
 local function DoFindText(editor_, pos, marker)
     editor = editor_
 
+    local output = ide:GetOutput()
+
     local current_mark_number   = INSTALLED_MARKERS[current_marker]
     local current_mark_settings = FIND_MARKERS[current_marker]
 
@@ -486,6 +488,7 @@ local function DoFindText(editor_, pos, marker)
 
     if current_mark_number then
         Editor.ConfigureIndicator(editor, current_mark_number, current_mark_settings)
+        Editor.ConfigureIndicator(output, current_mark_number, current_mark_settings)
     end
 
     --! @fixme there no file path for new documents (which not saved on disk)
@@ -510,31 +513,48 @@ local function DoFindText(editor_, pos, marker)
                 msg = '> '..L'Search for current word'..': "'
             end
 
-            --- seems this settings allows highlingth word in Output console in SciTE
-            -- props['lexer.errorlist.findtitle.begin'] = msg
-            -- output:SetProperty('lexer.errorlist.findtitle.begin', msg)
-            -- props['lexer.errorlist.findtitle.end'] = '"'
-            -- output:SetProperty('lexer.errorlist.findtitle.end', '"')
-
             print(msg .. sText .. '"')
         end
+
+        local current_output_line_start
+        local current_editor_line_start
 
         local count, marked = 0
         for s, e in Editor.iFindText(editor, sText, flags, nil, nil, word_style) do
             count = count + 1
 
             local line = editor:LineFromPosition(s)
-            EditorMarkText(editor, s, #sText, current_mark_number)
+            EditorMarkText(editor, s, e - s, current_mark_number)
             if line ~= marked then
-                if bookmark then editor:MarkerAdd(line, bookmark) end
-                local str = editor:GetLine(line) or ''
-                str = string.gsub(str, '%s+', ' ')
-                if isOutput then
-                    print(
-                        filePath .. string.format(':%d:\t', line + 1) .. str
-                    )
-                end
                 marked = line
+                if bookmark then editor:MarkerAdd(line, bookmark) end
+
+                if isOutput then
+                    local prefix = filePath .. string.format(':%d:\t', line + 1)
+
+                    current_editor_line_start = editor:PositionFromLine(line)
+                    -- we always aling output to line start
+                    current_output_line_start = output:GetCurrentPos()
+                    current_output_line_start = current_output_line_start + #prefix
+
+                    local str = editor:GetLine(line) or ''
+                    local length = #str
+                    str = string.gsub(str, '^%s+', '')
+
+                    current_output_line_start = current_output_line_start - (length - #str)
+
+                    -- can not remove spaces in the middle of the string because of
+                    -- it will change offsets of the words
+                    str = string.gsub(str, '%s+$', '')
+                    print(prefix .. str)
+                end
+            end
+
+            if isOutput then
+                local offset_in_line = s - current_editor_line_start
+                local length = e - s
+                local output_offset = current_output_line_start + offset_in_line
+                EditorMarkText(output, output_offset, length, current_mark_number)
             end
         end
 
