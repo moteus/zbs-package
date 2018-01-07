@@ -109,6 +109,36 @@ end
 
 do -- style
 
+local function h2d(n) return 0+('0x'..n) end
+
+local function H(c, bg) c = c:gsub('#','')
+  -- since alpha is not implemented, convert RGBA to RGB
+  -- assuming 0 is transparent and 255 is opaque
+  -- based on http://stackoverflow.com/a/2645218/1442917
+  local bg = bg and H(bg) or {255, 255, 255}
+  local a = #c > 6 and h2d(c:sub(7,8))/255 or 1
+  local r, g, b = h2d(c:sub(1,2)), h2d(c:sub(3,4)), h2d(c:sub(5,6))
+  return {
+    math.min(255, math.floor((1-a)*bg[1]+a*r)),
+    math.min(255, math.floor((1-a)*bg[2]+a*g)),
+    math.min(255, math.floor((1-a)*bg[3]+a*b))}
+end
+
+-- add more of the specified color (keeping all in 0-255 range)
+local mixer = function(c, n, more)
+  if not c or #c == 0 then return c end
+  local c = {c[1], c[2], c[3]} -- create a copy, so it can be modified
+  c[n] = c[n] + more
+  local excess = c[n] - 255
+  if excess > 0 then
+    for clr = 1, 3 do
+      c[clr] = n == clr and 255 or c[clr] > excess and c[clr] - excess or 0
+    end
+  end
+  return c
+end
+
+
 local theme = 'SL'
 
 -- to change the default color scheme; check tomorrow.lua for the list
@@ -150,7 +180,6 @@ styles.indicator.fncall.st = wxstc.wxSTC_INDIC_PLAIN
   wxSTC_INDIC_HIDDEN No visual effect;
   --]]
 
-
 do -- Lua tweeks
 
 local luaspec = ide.specs.lua
@@ -177,8 +206,8 @@ end
 
 if theme == 'SL' then
     -- to style individual keywords; `return` and `break` are shown in red
-    local lua_reserved_additional = subs_kw{[0] = 1, 'return', 'break', 'goto'}
-    styles[lua_reserved_additional] = {fg = {204,51,153}, b = true}
+    lua_reserved_additional = subs_kw{[0] = 1, 'return', 'break', 'goto'}
+    styles[lua_reserved_additional] = {fg = H'F77C6A', b = true}
     subs_kw({[0] = 1, 'or', 'and', 'not'}, 3)
 
     styles.indicator.varlocal.fg = styles.comment.fg
@@ -187,6 +216,11 @@ if theme == 'SL' then
 
     styles.operator.b = true
     styles.number.b = true
+
+    styles['`'] = {fg = H'B2ACA6', i = true, b = true}
+    styles.keywords1.fg = H'59A6EC' -- true false
+    styles.keywords2.fg = H'9AAF23' -- print ipairs
+    styles.keywords3.fg = H'2DC4C4' -- string.format
 end
 
 end
