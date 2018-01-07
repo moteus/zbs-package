@@ -206,6 +206,20 @@ local colors = {
     Blue        = H'0066FF',    -- semi-blue (keywords)
     Purple      = H'A6E22E',    -- light-grass-green
   },
+  SL = { -- contributed by Alexey Melnichuk
+    Background  = H'343C46',
+    CurrentLine = H'44505C',
+    Selection   = H'5D6975',
+    Foreground  = H'D8DEE8',    -- super-light-gray (everything else)
+    Comment     = H'A6ACBA',    -- bright green (comments)
+    Red         = H'F8AE58',    -- purple (numbers)
+    Orange      = H'AE81FF',    -- lavendar?? (numbers)
+    Yellow      = H'F8F8F2',    -- light-gray
+    Green       = H'98C694',    -- amber (string literal)
+    Aqua        = H'F87A58',    -- gray (operators, separators etc.)
+    Blue        = H'C494C4',    -- semi-blue (keywords)
+    Purple      = H'EC5E66',    -- light-grass-green
+  },
 }
 
 -- add more of the specified color (keeping all in 0-255 range)
