@@ -560,10 +560,11 @@ local function DoFindText(editor_, pos, marker)
 
         if count > 0 then
             if isOutput then
-                print('> '..string.gsub(L('Found: @ results'), '@', count))
+                print('>' .. TR("Found %d instance.", count):format(count))
                 if isTutorial then
-                    print('F3 (Shift+F3) - '..L'Jump by markers' )
-                    print('F4 (Shift+F4) - '..L'Jump by lines'   )
+                    --! @todo implement jump by marks/lines
+                    -- print('F3 (Shift+F3) - '..L'Jump by markers' )
+                    -- print('F4 (Shift+F4) - '..L'Jump by lines'   )
                     print('Ctrl+Alt+C - '..L'Erase all markers'  )
                 end
             end
