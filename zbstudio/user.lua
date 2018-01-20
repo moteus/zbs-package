@@ -322,6 +322,19 @@ smartbraces.multiline="cpp,css,hypertext"
 
 end
 
+do -- scvs
+
+-- Allows move cursors beyound EOL ()
+virtual_space = {}
+
+virtual_space.selection = true
+
+virtual_space.editor    = true
+
+virtual_space.nowrap    = true
+
+end
+
 -- Allows scroll down after last line
 endatlast = false
 
