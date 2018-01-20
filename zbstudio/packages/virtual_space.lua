@@ -55,12 +55,17 @@ local function configure(editor)
   )
 end
 
-return {
-  onRegister   = function()
-    virtual_space_flags = build_flag(
-      ide:GetConfig().virtual_space or SCVS_NONE
-    )
-  end,
-  onEditorNew  = function(_, editor) configure(editor) end,
-  onEditorLoad = function(_, editor) configure(editor) end,
-}
+Package.onRegister   = function(package)
+  local config = package:GetConfig()
+  virtual_space_flags = build_flag(config)
+end
+
+Package.onUnRegister   = function(package)
+  virtual_space_flags = nil
+end
+
+Package.onEditorNew  = function(_, editor) configure(editor) end
+
+Package.onEditorLoad = function(_, editor) configure(editor) end
+
+return Package
