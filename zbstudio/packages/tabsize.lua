@@ -34,7 +34,7 @@ local NextID = Counter(1)
 
 local function CreateDialog()
   dialog = wx.wxDialog(
-      wx.NULL,
+      ide.frame,
       wx.wxID_ANY,
       "Set indent opttions",
       wx.wxDefaultPosition,
@@ -108,7 +108,7 @@ function GetValues(tabsize, indent, usetabs)
   )
   useTabsCheckBox:SetValue(usetabs)
 
-  dialog:Centre()
+  dialog:CenterOnParent()
 
   tabSizeValue:SetFocus()
 
