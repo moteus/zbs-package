@@ -110,16 +110,18 @@ function GetValues(tabsize, indent, usetabs)
 
   dialog:CenterOnParent()
 
-  tabSizeValue:SetFocus()
+  local result = (wx.wxID_OK == dialog:ShowModal(true))
 
-  local result = dialog:ShowModal(true)
-
-  if wx.wxID_OK == result then
+  if result then
     tabsize = tonumber(tabSizeValue:GetValue()) or tabsize
     indent  = tonumber(indentSizeValue:GetValue()) or indent
     usetabs = not not useTabsCheckBox:GetValue()
-    return true, tabsize, indent, usetabs
   end
+
+  dialog:Destroy()
+  dialog = nil
+
+  return result, tabsize, indent, usetabs
 end
 
 end
