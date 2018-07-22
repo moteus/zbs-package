@@ -461,9 +461,6 @@ local function PairedTagsFinder(editor)
     if current_pos == old_current_pos then return end
     old_current_pos = current_pos
 
-    Editor.ConfigureIndicator(editor, red_indic, RED_STYLE)
-    Editor.ConfigureIndicator(editor, blue_indic, BLUE_STYLE)
-
     local tag_start = editor:FindText(current_pos, 0,"[<>]",
         wxstc.wxSTC_FIND_POSIX + wxstc.wxSTC_FIND_REGEXP
     )
@@ -517,6 +514,11 @@ local function PairedTagsFinder(editor)
     end
 end
 
+local function ConfigureEditor(editor)
+    Editor.ConfigureIndicator(editor, red_indic, RED_STYLE)
+    Editor.ConfigureIndicator(editor, blue_indic, BLUE_STYLE)
+end
+
 local function wrap(fn) return function()
     local editor = Editor.HasFocus(ide:GetEditor())
     if not editor then return end
@@ -536,6 +538,10 @@ local HotKeys = {
     pgoto  = K'Alt+G',
     select = K'Alt+S',
 }
+
+Package.onEditorNew  = function(_, editor) ConfigureEditor(editor) end
+
+Package.onEditorLoad = function(_, editor) ConfigureEditor(editor) end
 
 Package.onRegister = function(package)
     local config = package:GetConfig()

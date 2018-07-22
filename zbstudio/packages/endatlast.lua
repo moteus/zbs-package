@@ -6,6 +6,6 @@ local function configure(editor)
 end
 return {
   onRegister = function(package) enabled = ide:GetConfig().endatlast end,
-  onEditorNew = function(_, editor) configure(editor) end,
-  onEditorLoad = function(_, editor) configure(editor) end,
+  -- onEditorNew = function(_, editor) configure(editor) end,
+  -- onEditorLoad = function(_, editor) configure(editor) end,
 }

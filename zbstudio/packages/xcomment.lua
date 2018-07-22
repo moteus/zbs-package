@@ -31,6 +31,13 @@ local comment_settings = {
        stream_start        = '<!--',
        stream_end          = '-->',
     },
+
+    perl = {
+       block               = '#',
+       block_spaces        = 1, -- number of spaces after line comment squence
+       block_at_line_start = false,
+    },
+
 }
 
 -- State
@@ -84,7 +91,12 @@ end
 
 function Editor.GetLanguage(editor)
     local lexer = editor.spec and editor.spec.lexer or editor:GetLexer()
-    return LEXER_NAMES[lexer] or 'UNKNOWN'
+    local name = LEXER_NAMES[lexer]
+    if name then return name end
+    if type(lexer) == 'string' then
+        name = string.match(lexer, '^lexlpeg%.(.+)$')
+    end
+    return name or 'UNKNOWN'
 end
 
 function Editor.AppendNewLine(editor)
@@ -772,5 +784,28 @@ Package.onUnRegister = function()
     HOT_KEY:unset()
     HOT_KEY = nil
 end
+
+local function key_is(k, t)
+    for i = 1, #t do
+        if k == t then return true end
+    end
+end
+
+Package.onEditorKeyDown = function(self, editor, event)
+    local key = event:GetKeyCode()
+    local mod = event:GetModifiers()
+
+    if mod ~= wx.wxMOD_CONTROL then
+        return true
+    end
+
+    if key_is(key, {string.byte('q'), string.byte('Q')}) then
+        xComment()
+        return false
+    end
+
+    return true
+end
+
 
 return Package

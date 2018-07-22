@@ -511,4 +511,33 @@ function Package.onEditorNewfunction(_, editor) ConfigureEditor(editor) end
 
 function Package.onEditorLoad(_, editor) ConfigureEditor(editor) end
 
+local function key_is(k, t)
+    for i = 1, #t do
+        if k == t then return true end
+    end
+end
+
+local KEY_E = {string.byte('e'), string.byte('E')}
+
+Package.onEditorKeyDown = function(self, editor, event)
+    local key = event:GetKeyCode()
+    local mod = event:GetModifiers()
+
+    if not key_is(key, KEY_E) then
+        return true
+    end
+
+    if mod == wx.wxMOD_CONTROL then
+        GotoBrace()
+        return false
+    end
+
+    if mod == (wx.wxMOD_CONTROL + wx.wxMOD_SHIFT) then
+        SelectBrace()
+        return false
+    end
+
+    return true
+end
+
 return Package

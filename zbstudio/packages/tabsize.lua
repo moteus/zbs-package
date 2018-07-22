@@ -47,6 +47,9 @@ local function CreateDialog()
 
   local panel          = wx.wxPanel(dialog, wx.wxID_ANY)
 
+  panel:SetBackgroundColour( wx.wxColour.new(72, 91, 95) )
+  panel:SetForegroundColour( wx.wxColour.new(237, 241, 240) )
+
   local mainSizer      = wx.wxBoxSizer(wx.wxHORIZONTAL)
   local boxSizer       = wx.wxStaticBoxSizer(
       wx.wxStaticBox(panel, wx.wxID_ANY, ""), wx.wxHORIZONTAL

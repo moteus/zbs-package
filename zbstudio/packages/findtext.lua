@@ -475,6 +475,24 @@ local function EditorMarkText(editor, start, length, indicator)
     return Editor.MarkText(editor, start, length, indicator)
 end
 
+local function ShowOutput()
+  -- based on menu_view.lua::togglePanel
+
+  local uimgr = ide.frame and ide.frame.uimgr
+  if not uimgr then return end
+
+  local pane = uimgr:GetPane('bottomnotebook')
+  if not pane then return end
+
+  if pane:IsShown() then return end
+
+  pane:BestSize(pane.window:GetSize())
+  pane:Show(true)
+  uimgr:Update()
+
+  return true
+end
+
 local function DoFindText(editor_, pos, marker)
     editor = editor_
 
@@ -581,6 +599,10 @@ local function DoFindText(editor_, pos, marker)
         end
 
         editor:GotoPos(pos)
+
+        ShowOutput()
+
+        output:Show()
         output:SetFocus()
     end
 end
@@ -841,5 +863,33 @@ Package.onMenuEditor = function(self, menu, editor, event)
     editor:Connect(ID_FIND_TEXT_MARK, wx.wxEVT_COMMAND_MENU_SELECTED,
         function() DoFindText(editor, pos) end)
 end
+
+local function key_is(k, t)
+    for i = 1, #t do
+        if k == t then return true end
+    end
+end
+
+Package.onEditorKeyDown = function(self, editor, event)
+    local key = event:GetKeyCode()
+    local mod = event:GetModifiers()
+
+    if mod ~= (wx.wxMOD_CONTROL + wx.wxMOD_ALT) then
+        return true
+    end
+
+    if key_is(key, {string.byte('c'), string.byte('C')}) then
+        ClearFindMarks()
+        return false
+    end
+
+    if key_is(key, {string.byte('s'), string.byte('S')}) then
+        CallMarkSelected()
+        return false
+    end
+
+    return true
+end
+
 
 return Package
