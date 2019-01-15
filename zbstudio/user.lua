@@ -258,6 +258,8 @@ keymap[ID.STOPDEBUG]        = "Ctrl-F5"
 keymap[ID.AUTOCOMPLETE]     = "Ctrl-SPACE"
 keymap[ID.REPLACE]          = "Ctrl-H"
 keymap[ID.REPLACEINFILES]   = "Ctrl-Shift-H"
+keymap[ID.REPLACEINFILES]   = "Ctrl-Shift-H"
+keymap[ID.VIEWTOOLBAR]      = "Ctrl-Shift-T"
 
 end
 
