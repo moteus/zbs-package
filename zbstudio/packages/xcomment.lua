@@ -787,7 +787,7 @@ end
 
 local function key_is(k, t)
     for i = 1, #t do
-        if k == t then return true end
+        if k == t[i] then return true end
     end
 end
 
@@ -806,6 +806,5 @@ Package.onEditorKeyDown = function(self, editor, event)
 
     return true
 end
-
 
 return Package
