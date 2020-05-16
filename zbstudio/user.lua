@@ -1,5 +1,8 @@
+-- do return end
 
-do -- style
+if true then -- do -- style
+
+toolbar.iconsize = 16
 
 local theme = 'SL'
 
@@ -36,7 +39,7 @@ end
 -- of supported schemes or use cfg/scheme-picker.lua to pick a scheme.
 styles = loadfile('cfg/tomorrow.lua')(theme)
 
-editor.fontsize = 10
+editor.fontsize = 9
 
 -- also apply the same scheme to Output and Console windows
 stylesoutshell = styles
@@ -125,7 +128,7 @@ end
 
 end
 
-do -- spaces
+if true then -- do -- spaces
 -- to disable wrapping of long lines in the editor
 editor.usewrap = false
 
@@ -169,7 +172,7 @@ editor.tabwidth = 4
 
 end
 
-do -- debug
+if true then -- do -- debug
 
 -- to automatically open files requested during debugging
 editor.autoactivate = true
@@ -180,13 +183,21 @@ editor.autoactivate = true
 -- by default, but can be still reconfigured with this setting.
 debugger.runonstart = true
 
-debugger.dir_map = {
-    {"^/usr/share/userverlua/", "../automattic-userver/"};
+local maps = {
+    {'/usr/share/userverlua/userver/wssp', '/home/amelnichuk/projects/wssp/lua/userver/wssp'},
+    {'/usr/share/userverlua/userver',      '/home/amelnichuk/projects/userverlua/lua/userver'},
 }
+
+debugger.dir_map, debugger.bp_dir_map = {}, {}
+
+for _, map in ipairs(maps) do
+    table.insert(debugger.dir_map,    {'^' .. map[1], map[2]})
+    table.insert(debugger.bp_dir_map, {'^' .. map[2], map[1]})
+end
 
 end
 
-do -- misc
+if true then -- do -- misc
 
 -- to specify language to use in the IDE (requires a file in cfg/i18n folder)
 --~ language = "ru"
@@ -216,7 +227,7 @@ editor.endatlastline = false
 
 end
 
-do -- folding
+if true then -- do -- folding
 
 -- to set compact fold that doesn't include empty lines after a block
 editor.foldcompact = false
@@ -234,7 +245,7 @@ editor.foldflags = 0
 
 end
 
-do -- keymap
+if true then -- do -- keymap
 
 -- enable `Opt+Shift+Left/Right` shortcut on OSX
 editor.keymap[#editor.keymap+1] = {wxstc.wxSTC_KEY_LEFT, wxstc.wxSTC_SCMOD_ALT+wxstc.wxSTC_SCMOD_SHIFT, wxstc.wxSTC_CMD_WORDLEFTEXTEND, "Macintosh"}
@@ -258,12 +269,11 @@ keymap[ID.STOPDEBUG]        = "Ctrl-F5"
 keymap[ID.AUTOCOMPLETE]     = "Ctrl-SPACE"
 keymap[ID.REPLACE]          = "Ctrl-H"
 keymap[ID.REPLACEINFILES]   = "Ctrl-Shift-H"
-keymap[ID.REPLACEINFILES]   = "Ctrl-Shift-H"
 keymap[ID.VIEWTOOLBAR]      = "Ctrl-Shift-T"
 
 end
 
-do -- plugins
+if true then -- do -- plugins
 
 do -- findtext
 
@@ -355,13 +365,12 @@ virtual_space.editor    = false
 virtual_space.nowrap    = false
 
 end
-
 -- Allows scroll down after last line
 -- endatlast = false
 
 end
 
-do -- colorize
+if true then -- do -- colorize
 
 (...).colorize = function (lexer_name)
   lexer_name = lexer_name or 'lua'
