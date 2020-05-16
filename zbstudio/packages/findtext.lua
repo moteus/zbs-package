@@ -808,9 +808,10 @@ end
 Package.onIdle = function(self)
     if HIGHLIGHT_MODE < 2 then return end
 
-    if not updateneeded then return end
     local editor = updateneeded
     updateneeded = false
+
+    if not ide:IsValidCtrl(editor) then return end
 
     local length, curpos = editor:GetLength(), editor:GetCurrentPos()
 
