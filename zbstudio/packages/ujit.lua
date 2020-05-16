@@ -1,9 +1,21 @@
 --! @todo use editor.spec.lexer / editor:GetLexer()
 local LEXERS_EXT = {
     perl = {
-        '.t', '.pl', '.pm',
+        '.pl', '.pm',
+    };
+
+    prove = {
+        '.t'
+    };
+
+    jq = {
+        '.json'
     };
 }
+
+local function os_command(t)
+    return t[ide.osname:upper()] or t[1]
+end
 
 local APPS = {
     lua  = {'lua',
@@ -14,7 +26,22 @@ local APPS = {
     perl = {'general',
         lexer      = 'perl',
         app        = 'perl',
-        app_params = '-w',
+        app_params = '-w "{FILE}"',
+    };
+
+    prove = {'general',
+        lexer      = 'perl',
+        app        = 'docker',
+        app_params = os_command {
+            "exec {DOCKER_NAME} su - {DOCKER_USER} -c 'cd {PROJECT_DIR} && prove \"{FILE}\"'",
+            WINDOWS = "exec {DOCKER_NAME} bash -c '\"prove \"{FILE}\"'";
+        }
+    };
+
+    jq = {'general',
+        lexer      = 'json',
+        app        = 'jq',
+        app_params = '. "{FILE}"',
     };
 }
 
@@ -31,7 +58,7 @@ local Package = {
   name        = "ujit",
   description = "uJIT",
   author      = "Alexey Melnichuk",
-  version     = 0.15,
+  version     = 0.16,
 }
 
 -----------------------------------------------------------------------------
@@ -48,6 +75,24 @@ end
 
 local function printf(...)
     print(string.format(...))
+end
+
+local function apply_macros(str, macro)
+    return (string.gsub(str, '{(.-)}', macro))
+end
+
+local function get(t, ...)
+    for i = 1, select('#', ...) do
+        local key = select(i, ...)
+        if key == nil then
+            return nil
+        end
+        if t == nil then
+            return nil
+        end
+        t = t[key]
+    end
+    return t
 end
 
 local function GetFullPath(path)
@@ -132,9 +177,16 @@ local function GeneralRunner(lexer, app, app_params, params)
         -- this parameters for script not for interpreter
         local params = params .. (self:GetCommandLineArg(lexer) or '')
 
+        local app_params = apply_macros(app_params, {
+            FILE        = filepath,
+            DOCKER_USER = get(ide.config, 'iponweb', 'lua_dev', 'docker', 'user'),
+            DOCKER_NAME = get(ide.config, 'iponweb', 'lua_dev', 'docker', 'container'),
+            PROJECT_DIR = get(ide.config, 'iponweb', 'lua_dev', 'path'),
+        })
+
         -- build command line string
-        local cmd = string.format([["%s" %s "%s" %s]],
-            app, app_params or '', filepath, params or ''
+        local cmd = string.format([["%s" %s %s]],
+            app, app_params or '', params or ''
         )
 
         local cwd    = self:fworkdir(wfilename)
