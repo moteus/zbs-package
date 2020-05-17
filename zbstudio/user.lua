@@ -183,17 +183,10 @@ editor.autoactivate = true
 -- by default, but can be still reconfigured with this setting.
 debugger.runonstart = true
 
-local maps = {
-    {'/usr/share/userverlua/userver/wssp', '/home/amelnichuk/projects/wssp/lua/userver/wssp'},
-    {'/usr/share/userverlua/userver',      '/home/amelnichuk/projects/userverlua/lua/userver'},
+debugger.pathmap = {
+    {'/usr/share/userverlua/userver/wssp', '../wssp/lua/userver/wssp'},
+    {'/usr/share/userverlua/userver',      '../userverlua/lua/userver'},
 }
-
-debugger.dir_map, debugger.bp_dir_map = {}, {}
-
-for _, map in ipairs(maps) do
-    table.insert(debugger.dir_map,    {'^' .. map[1], map[2]})
-    table.insert(debugger.bp_dir_map, {'^' .. map[2], map[1]})
-end
 
 end
 
