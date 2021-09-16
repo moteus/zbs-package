@@ -363,7 +363,29 @@ local function SetNextSelection(editor, skip, start_pos, end_pos)
     editor:ShowRange(end_pos, start_pos)
 end
 
-local goto_context
+local function CalculateSelectionRange(selected, order, s, e, offset)
+    local start_pos, end_pos
+    if selected then
+        if order then
+            start_pos, end_pos = s, e
+        else
+            start_pos, end_pos = e, s
+        end
+    else
+        start_pos = s + offset
+        end_pos = start_pos
+    end
+    return start_pos, end_pos
+end
+
+local function PosInSelection(editor, pos)
+    for i = 1, editor:GetSelections() do
+        local start_pos, end_pos = editor:GetSelectionNStart(i-1), editor:GetSelectionNEnd(i-1)
+        if pos >= start_pos and pos <= end_pos then
+            return i
+        end
+    end
+end
 
 local function GotoNext(editor_, skip)
     editor = editor_
@@ -374,20 +396,25 @@ local function GotoNext(editor_, skip)
     end
 
     local pos = editor:GetCurrentPos()
+    local offset = pos - word_start
+    local order  = (word_start <= word_end)
 
     local search_start_pos = math.max(word_start, word_end)
     for s, e in Editor.iFindText(editor, sText, flags, search_start_pos, nil, word_style) do
-        if selected then
-            if word_start <= word_end then
-                SetNextSelection(editor, skip, s, e)
-            else
-                SetNextSelection(editor, skip, e, s)
-            end
-        else
-            local pos = s + (pos - word_start)
-            SetNextSelection(editor, skip, pos, pos)
+        local start_pos, end_pos = CalculateSelectionRange(selected, order, s, e, offset)
+        if not PosInSelection(editor, end_pos) then
+            SetNextSelection(editor, skip, start_pos, end_pos)
+            return
         end
-        break
+    end
+
+    search_start_pos = math.min(word_start, word_end)
+    for s, e in Editor.iFindText(editor, sText, flags, nil, search_start_pos, word_style) do
+        local start_pos, end_pos = CalculateSelectionRange(selected, order, s, e, offset)
+        if not PosInSelection(editor, end_pos) then
+            SetNextSelection(editor, skip, start_pos, end_pos)
+            return
+        end
     end
 end
 
@@ -401,22 +428,19 @@ local function FindAll(editor_)
 
     local first_line = editor:GetFirstVisibleLine()
     local pos = editor:GetCurrentPos()
+    local offset = pos - word_start
+    local order  = (word_start <= word_end)
+
     editor:ClearSelections()
 
     local main_index
     for s, e in Editor.iFindText(editor, sText, flags, nil, nil, word_style) do
-        if selected then
-            if pos <= word_start then
-                SetNextSelection(editor, false, e, s)
-            else
-                SetNextSelection(editor, false, s, e)
-            end
-        else
-            local pos = s + (pos - word_start)
-            SetNextSelection(editor, false, pos, pos)
-        end
         if s <= pos and pos <= e then
             main_index = editor:GetSelections() - 1
+        end
+        local start_pos, end_pos = CalculateSelectionRange(selected, order, s, e, offset)
+        if not PosInSelection(editor, end_pos) then
+            SetNextSelection(editor, skip, start_pos, end_pos)
         end
     end
 
