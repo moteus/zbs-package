@@ -4,8 +4,16 @@ local LEXERS_EXT = {
         '.pl', '.pm',
     };
 
+    go_run = {
+        '.go'
+    };
+
+    python_docker = {
+        '.py'
+    };
+
     prove = {
-        '.t'
+        '.t', '.tt'
     };
 
     jq = {
@@ -15,6 +23,13 @@ local LEXERS_EXT = {
 
 local function os_command(t)
     return t[ide.osname:upper()] or t[1]
+end
+
+local function docker_command(cmd)
+    return os_command{
+        "exec {DOCKER_NAME} su - {DOCKER_USER} -c 'cd {PROJECT_DIR} && " .. cmd .. "'",
+        WINDOWS = "exec {DOCKER_NAME} bash -c '\"" .. cmd .. "\"'";
+    }
 end
 
 local APPS = {
@@ -29,13 +44,34 @@ local APPS = {
         app_params = '-w "{FILE}"',
     };
 
+    go_run = {'general',
+        lexer      = 'go',
+        app        = 'go',
+        app_params = 'run "{FILE}"',
+    };
+
+    go_test = {'general',
+        lexer      = 'go',
+        app        = 'go',
+        app_params = 'test -v "{FILE}"',
+    };
+
+    python = {'general',
+        lexer      = 'python',
+        app        = 'python3',
+        app_params = '"{FILE}"',
+    };
+
+    python_docker = {'general',
+        lexer      = 'python',
+        app        = 'docker',
+        app_params = docker_command 'python3 "{FILE}"'
+    };
+
     prove = {'general',
         lexer      = 'perl',
         app        = 'docker',
-        app_params = os_command {
-            "exec {DOCKER_NAME} su - {DOCKER_USER} -c 'cd {PROJECT_DIR} && prove \"{FILE}\"'",
-            WINDOWS = "exec {DOCKER_NAME} bash -c '\"prove \"{FILE}\"'";
-        }
+        app_params = docker_command 'prove "{FILE}"',
     };
 
     jq = {'general',
@@ -58,7 +94,7 @@ local Package = {
   name        = "ujit",
   description = "uJIT",
   author      = "Alexey Melnichuk",
-  version     = 0.16,
+  version     = 0.17,
 }
 
 -----------------------------------------------------------------------------
@@ -157,6 +193,15 @@ local function GetLexerName(path)
 
     if ide.osname == 'Windows' then
         ext = string.lower(ext)
+    end
+
+    local name = path:GetFullName()
+    if name and name:find('lua_unit+[A-Za-z_%d]+%.lua$') then
+        return 'prove'
+    end
+
+    if name and name:find('_test%.go$') then
+        return 'go_test'
     end
 
     return EXT_TO_LEXER[ext] or 'lua'

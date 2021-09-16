@@ -38,6 +38,11 @@ local comment_settings = {
        block_at_line_start = false,
     },
 
+    python = {
+       block               = '#',
+       block_spaces        = 1, -- number of spaces after line comment squence
+       block_at_line_start = false,
+    },
 }
 
 -- State

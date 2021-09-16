@@ -581,9 +581,15 @@ Package.onEditorUpdateUI = function(self, editor, event)
 end
 
 Package.onIdle = function()
+    if not updateneeded then return end
+
     local editor = updateneeded
     updateneeded = false
-    if not ide:IsValidCtrl(editor) then return end
+
+    if not ide:IsValidCtrl(editor) then
+        return
+    end
+
     PairedTagsFinder(editor)
 end
 

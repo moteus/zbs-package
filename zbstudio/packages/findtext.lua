@@ -808,10 +808,13 @@ end
 Package.onIdle = function(self)
     if HIGHLIGHT_MODE < 2 then return end
 
+    if not updateneeded then return end
     local editor = updateneeded
     updateneeded = false
 
-    if not ide:IsValidCtrl(editor) then return end
+    if not ide:IsValidCtrl(editor) then
+        return
+    end
 
     local length, curpos = editor:GetLength(), editor:GetCurrentPos()
 
@@ -867,7 +870,8 @@ end
 
 local function key_is(k, t)
     for i = 1, #t do
-        if k == t then return true end
+        local c = string.byte(t[i])
+        if k == c then return true end
     end
 end
 
@@ -875,16 +879,18 @@ Package.onEditorKeyDown = function(self, editor, event)
     local key = event:GetKeyCode()
     local mod = event:GetModifiers()
 
+    --@BUG https://trac.wxwidgets.org/ticket/18054
+
     if mod ~= (wx.wxMOD_CONTROL + wx.wxMOD_ALT) then
         return true
     end
 
-    if key_is(key, {string.byte('c'), string.byte('C')}) then
+    if key_is(key, {'c', 'C', 'с', 'С'}) then
         ClearFindMarks()
         return false
     end
 
-    if key_is(key, {string.byte('s'), string.byte('S')}) then
+    if key_is(key, {'s', 'S', 'ы', 'Ы'}) then
         CallMarkSelected()
         return false
     end

@@ -1,8 +1,10 @@
 -- do return end
+local home = {
+   -- iconsize = 24,
+   -- fontsize = 11,
+}
 
 if true then -- do -- style
-
-toolbar.iconsize = 16
 
 local theme = 'SL'
 
@@ -39,7 +41,9 @@ end
 -- of supported schemes or use cfg/scheme-picker.lua to pick a scheme.
 styles = loadfile('cfg/tomorrow.lua')(theme)
 
-editor.fontsize = 9
+editor.fontsize = home.fontsize or 9
+filetree.fontsize = home.fontsize or 9
+toolbar.iconsize = home.iconsize or 16
 
 -- also apply the same scheme to Output and Console windows
 stylesoutshell = styles
@@ -184,6 +188,7 @@ editor.autoactivate = true
 debugger.runonstart = true
 
 debugger.pathmap = {
+    {'script code dummy/script.lua',       './t/dummy/script.lua'},
     {'/usr/share/userverlua/userver/wssp', '../wssp/lua/userver/wssp'},
     {'/usr/share/userverlua/userver',      '../userverlua/lua/userver'},
 }
@@ -203,9 +208,6 @@ acandtip.startat = 4
 -- to disable zoom with mouse wheel as it may be too sensitive on OSX
 editor.nomousezoom = true
 
-editor.specmap.t = "perl"
-editor.specmap.rng = "xml"
-
 -- enable handling of ANSI escapes in the Output window
 output.showansi = true
 
@@ -216,8 +218,21 @@ output.usewrap = false
 -- editor.modifiedprefix = '* '
 
 -- (v1.71+)
+-- Allows scroll down after last line
 editor.endatlastline = false
 
+end
+
+if true then -- do -- extension to spec
+    local spec = {
+        t    = 'perl',
+        tt   = 'perl',
+        rng  = 'xml',
+        ujit = 'lua', -- for shebang
+    }
+    for ext, spec in pairs(spec) do
+        editor.specmap[ext] = spec
+    end
 end
 
 if true then -- do -- folding
@@ -358,8 +373,47 @@ virtual_space.editor    = false
 virtual_space.nowrap    = false
 
 end
--- Allows scroll down after last line
--- endatlast = false
+
+do -- uniquetabname
+
+uniquetabname = {}
+
+uniquetabname.strip = {'/lua/userver/wssp/'}
+
+uniquetabname.mark = '…'
+
+end
+
+do -- snippets
+
+snippets = {
+  settings = {
+    nested         = true,
+    tab_activation = true,
+    keys = {
+      -- ['Alt+J'           ] = 'list',
+      -- ['Ctrl+J'          ] = 'cancel',
+      -- ['Ctrl+Shift+J'    ] = 'cancel_all',
+      -- ['Ctrl+Shift+Alt+J'] = 'show_scope',
+      -- ['Ctrl+Alt+J'      ] = 'finish',
+      -- ['Ctrl+T'          ] = '__test',
+      -- ['Ctrl+J'          ] = 'insert',
+      -- ['Ctrl+Shift+J'    ] = 'prev',
+    },
+  },
+  {
+    scope      = 'perl.text',
+    activation = {'tab', 'mdeb'},
+    text       = "BEGIN{$ENV{SC}='${0}'}\nBEGIN{$ENV{MOBDEBUG}='1'}"
+  },
+  {
+    scope      = 'lua.text',
+    activation = {'tab', 'mdeb'},
+    text       = "mobdebug_start()"
+  },
+}
+
+end
 
 end
 
