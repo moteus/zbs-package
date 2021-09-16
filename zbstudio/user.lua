@@ -371,3 +371,48 @@ if true then -- do -- colorize
 end
 
 end
+
+if not (...).package_require then
+  local package_path = {
+    '.',
+    'packages/',
+    '../packages/',
+    MergeFullPath(ide.oshome, '.' .. ide.appname .. '/packages')
+  }
+
+  local package_loaded = {}
+
+  local _package_require = function(m)
+    local module = package_loaded[m]
+    if module ~= nil then
+      if module == false then
+        local err = string.format("loop or previous error loading module '%s'", m)
+        error(err, 2)
+        return
+      end
+      return module
+    end
+
+    package_loaded[m] = false
+
+    local errors = {}
+    local rpath = string.gsub(m, '%.', '/') .. '.lua'
+    for _, ppath in ipairs(package_path) do
+      local full_path = MergeFullPath(ppath, rpath)
+      if wx.wxFileExists(full_path) then
+        local loader = assert(loadfile(full_path))
+        package_loaded[m] = assert(loader(m))
+        return package_loaded[m]
+      end
+      table.insert(errors, string.format("no file '%s'", full_path))
+    end
+
+    error(string.format("module '%s' not found:\n\t%s", m, table.concat(errors, '\n\t')), 2)
+  end
+
+  (...).package_require = setmetatable({
+      loaded = package_loaded,
+  }, {__call = function(_, ...)
+      return _package_require(...)
+  end})
+end
