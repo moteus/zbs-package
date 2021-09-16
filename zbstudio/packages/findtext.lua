@@ -573,8 +573,8 @@ local keys = {
     ['Ctrl-Alt-C'         ] = 'clear',
     ['Ctrl-Alt-S'         ] = 'call',
     ['Ctrl-J'             ] = 'next',    ['Alt-J'              ] = 'find_all',
-    ['Ctrl-K Ctrl-D'      ] = 'skip_next',
-    ['Ctrl-Shift-D'       ] = 'undo_next',
+    ['Ctrl-K Ctrl-J'      ] = 'skip_next',
+    ['Ctrl-Shift-J'       ] = 'undo_next',
 }
 
 Package.onRegister = function(package)
