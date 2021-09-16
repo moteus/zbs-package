@@ -1,3 +1,6 @@
+local Editor       = package_require 'utils.editor'
+local HotKeys      = package_require 'hotkeys.manager'
+
 local Package = {
   name = "Find/Highlight identical text",
   author = "mozers™, Алексей, codewarlock1101, VladVRO, Tymur Gubayev, Alexey Melnichuk",
@@ -86,7 +89,6 @@ local flag1
 local bookmark
 local isOutput
 local isTutorial
-local matchstyle
 
 -- End state
 --------------------------------------------------------------------
@@ -102,301 +104,6 @@ end
 local function L(text)
     return text
 end
-
---------------------------------------------------------------------
-local Editor = {} do
-
-local function append(t, v)
-    t[#t+1] = v
-    return t
-end
-
-local function split_first(str, sep, plain)
-  local e, e2 = string.find(str, sep, nil, plain)
-  if e then
-    return string.sub(str, 1, e - 1), string.sub(str, e2 + 1)
-  end
-  return str
-end
-
-local SC_EOL_CRLF = 0
-local SC_EOL_CR   = 1
-local SC_EOL_LF   = 2
-
-local LEXER_NAMES = {}
-for k, v in pairs(wxstc) do
-    if string.find(tostring(k), 'wxSTC_LEX') then
-        local name = string.lower(string.sub(k, 11))
-        LEXER_NAMES[ v ] = name
-    end
-end
-
-function Editor.GetLanguage(editor)
-    local lexer = editor.spec and editor.spec.lexer or editor:GetLexer()
-    return LEXER_NAMES[lexer] or 'UNKNOWN'
-end
-
-function Editor.AppendNewLine(editor)
-    local line = editor:GetLineCount()
-    editor:InsertText(
-        editor:PositionFromLine(line),
-        Editor.GetEOL(editor)
-    )
-    return editor:PositionFromLine(line)
-end
-
-function Editor.GetEOL(editor)
-  local eol = "\r\n"
-  if editor.EOLMode == SC_EOL_CR then
-    eol = "\r"
-  elseif editor.EOLMode == SC_EOL_LF then
-    eol = "\n"
-  end
-  return eol
-end
-
-function Editor.GetSelText(editor)
-  local selection_pos_start, selection_pos_end = editor:GetSelection()
-  local selection_line_start = editor:LineFromPosition(selection_pos_start)
-  local selection_line_end   = editor:LineFromPosition(selection_pos_end)
-
-  local selection = {
-    pos_start    = selection_pos_start,
-    pos_end      = selection_pos_end,
-    first_line   = selection_line_start,
-    last_line    = selection_line_end,
-    is_rectangle = editor:SelectionIsRectangle(),
-    is_multiple  = editor:GetSelections() > 1,
-    text         = ''
-  }
-
-  if selection_pos_start ~= selection_pos_end then
-    if selection.is_rectangle then
-      local EOL = Editor.GetEOL(editor)
-      local selected, not_empty = {}, false
-      for line = selection_line_start, selection_line_end do
-        local selection_line_pos_start = editor:GetLineSelStartPosition(line)
-        local selection_line_pos_end   = editor:GetLineSelEndPosition(line)
-        not_empty = not_empty or selection_line_pos_start ~= selection_line_pos_end
-        append(selected, editor:GetTextRange(selection_line_pos_start, selection_line_pos_end))
-      end
-      selection.text = not_empty and (table.concat(selected, EOL) .. EOL) or ''
-    else
-      selection.text = editor:GetTextRange(selection_pos_start, selection_pos_end)
-    end
-  end
-
-  return selection.text, selection.pos_start, selection.pos_end
-end
-
-function Editor.GetSymbolAt(editor, pos)
-    return editor:GetTextRange(pos, editor:PositionAfter(pos))
-end
-
-function Editor.GetStyleAt(editor, pos)
-    local mask = bit.lshift(1, editor:GetStyleBitsNeeded()) - 1
-    return bit.band(mask, editor:GetStyleAt(pos))
-end
-
-function Editor.FindText(editor, text, flags, start, finish)
-    editor:SetSearchFlags(flags)
-    editor:SetTargetStart(start or 0)
-    editor:SetTargetEnd(finish or editor:GetLength())
-    local posFind = editor:SearchInTarget(text)
-    if posFind ~= wx.wxNOT_FOUND then
-        start, finish = editor:GetTargetStart(), editor:GetTargetEnd()
-        if start >= 0 and finish >= 0 then
-            return start, finish
-        end
-    end
-    return wx.wxNOT_FOUND, 0
-end
-
-local function isFindDone(forward, pos, finish)
-    if forward then
-        return pos > finish
-    end
-    return pos < finish
-end
-
-function Editor.iFindText(editor, text, flags, pos, finish, style)
-    finish = finish or editor:GetLength()
-    pos = pos or 0
-    local forward = pos < finish
-    return function()
-        while not isFindDone(forward, pos, finish) do
-            local start_pos, end_pos = Editor.FindText(editor, text, flags, pos, finish)
-            if start_pos == wx.wxNOT_FOUND then
-                return nil
-            end
-            if forward then
-                pos = end_pos + 1
-            else
-                pos = start_pos -1
-            end
-            if (not style) or (style == Editor.GetStyleAt(editor, start_pos)) then
-                return start_pos, end_pos
-            end
-        end
-    end
-end
-
-function Editor.HasFocus(editor)
-    return editor == ide:GetEditorWithFocus() and editor
-end
-
-function Editor.GetDocument(editor)
-    return ide:GetDocument(editor)
-end
-
-function Editor.GetCurrentFilePath(editor)
-    local doc = Editor.GetDocument(editor)
-    return doc and doc:GetFilePath()
-end
-
-function Editor.ClearMarks(editor, indicator, start, length)
-    local current_indicator = editor:GetIndicatorCurrent()
-    start  = start or 0
-    length = length or editor:GetLength()
-
-    if type(indicator) == 'table' then
-        for _, indicator in ipairs(indicator) do
-            editor:SetIndicatorCurrent(indicator)
-            editor:IndicatorClearRange(start, length)
-        end
-    else
-        editor:SetIndicatorCurrent(indicator)
-        editor:IndicatorClearRange(start, length)
-    end
-
-    editor:SetIndicatorCurrent(current_indicator)
-end
-
-function Editor.MarkText(editor, start, length, indicator)
-    local current_indicator = editor:GetIndicatorCurrent()
-    editor:SetIndicatorCurrent(indicator)
-    editor:IndicatorFillRange(start, length)
-    editor:SetIndicatorCurrent(current_indicator)
-end
-
-local STYLE_CACHE, STYLE_NAMES = {}, {
-    dotbox       = wxstc.wxSTC_INDIC_DOTBOX,
-    roundbox     = wxstc.wxSTC_INDIC_ROUNDBOX,
-    tt           = wxstc.wxSTC_INDIC_TT,
-    roundbox     = wxstc.wxSTC_INDIC_ROUNDBOX,
-    straightbox  = wxstc.wxSTC_INDIC_STRAIGHTBOX,
-    diagonal     = wxstc.wxSTC_INDIC_DIAGONAL,
-    squiggle     = wxstc.wxSTC_INDIC_SQUIGGLE,
-}
-
--- Convert sting like #<HEX_COLOR>,style[:alpha],@alpha,[U|u]
-function Editor.DecodeStyleString(s)
-    local color, style, alpha, under, oalpha
-    if s then
-        local cached = STYLE_CACHE[s]
-        if cached then
-            return cached[1], cached[2], cached[3],
-                cached[4], cached[5]
-        end
-        for param in string.gmatch(s, '[^,]+') do
-            if not color then
-                if string.sub(param, 1, 1) == '#' then
-                    local r, g, b, a = string.sub(param, 2, 3), string.sub(param, 4, 5),
-                        string.sub(param, 6, 7), string.sub(param, 8, 9)
-                    r = tonumber(r, 16) or 0
-                    g = tonumber(g, 16) or 0
-                    b = tonumber(b, 16) or 0
-                    if a and #a > 0 then
-                        alpha = tonumber(a, 16) or 0
-                    end
-                    color = wx.wxColour(r, g, b)
-                else
-                    param = (tonumber(param) or 0) % (1+0xFFFFFFFF)
-                    local r = param % 256; param = math.floor(param / 256)
-                    local b = param % 256; param = math.floor(param / 256)
-                    local g = param % 256; param = math.floor(param / 256)
-                    alpha = param
-                    color = wx.wxColour(r, g, b)
-                end
-            elseif string.sub(param, 1, 1) == '@' then
-                alpha = tonumber((string.sub(param, 2)))
-            elseif string.sub(param, 1, 1) == 'u' or string.sub(param, 1, 1) == 'U' then
-                under = (string.sub(param, 1, 1) == 'U')
-            elseif #param > 0 then
-                local name, alpha = split_first(param, ':', true)
-                style = tonumber(name) or STYLE_NAMES[name]
-                    or wxstc['wxSTC_INDIC_' .. name]
-                oalpha = tonumber(alpha)
-            end
-        end
-    end
-
-    color = color or wx.wxColour(0, 0, 0)
-    alpha = alpha or 0
-    style = style or STYLE_NAMES['roundbox']
-
-    if s then
-        STYLE_CACHE[s] = {color, style, alpha, under, oalpha}
-    end
-
-    return color, style, alpha, under, oalpha
-end
-
-function Editor.ConfigureIndicator(editor, indicator, params)
-    local color, style, alpha, under, oalpha = Editor.DecodeStyleString(params)
-    editor:IndicatorSetForeground(indicator, color)
-    editor:IndicatorSetStyle     (indicator, style)
-    editor:IndicatorSetAlpha     (indicator, alpha)
-    if under ~= nil then
-        editor:IndicatorSetUnder (indicator, not not under)
-    end
-    if oalpha then
-        editor:IndicatorSetOutlineAlpha(indicator, oalpha)
-    end
-end
-
-function Editor.SetSel(editor, nStart, nEnd)
-    if nEnd < 0 then nEnd = editor:GetLength() end
-    if nStart < 0 then nStart = nEnd end
-
-    editor:GotoPos(nEnd)
-    editor:SetAnchor(nStart)
-end
-
-end
---------------------------------------------------------------------
-
---------------------------------------------------------------------
-local HotKeyToggle = {} do
-HotKeyToggle.__index = HotKeyToggle
-
-function HotKeyToggle:new(key)
-    local o = setmetatable({key = key}, self)
-    return o
-end
-
-function HotKeyToggle:set(handler)
-    assert(self.id == nil)
-    self.prev = ide:GetHotKey(self.key)
-    self.id = ide:SetHotKey(handler, self.key)
-    return self
-end
-
-function HotKeyToggle:unset()
-    assert(self.id ~= nil)
-    if self.id == ide:GetHotKey(self.key) then
-        if self.prev then
-            ide:SetHotKey(self.prev, self.key)
-        else
-            --! @todo properly remove handler
-            ide:SetHotKey(function()end, self.key)
-        end
-    end
-    self.prev, self.id = nil
-end
-
-end
---------------------------------------------------------------------
 
 local function in_array(a, v)
     if a then
@@ -444,26 +151,34 @@ local function IsReservedWord(editor, pos, text)
     return cache[text]
 end
 
-local function GetCurrentWord(editor, curpos)
-    local pos_start = editor:WordStartPosition(curpos, true)
-    local pos_end   = editor:WordEndPosition(curpos, true)
+local function GetCurrentWord(editor, pos)
+    local pos_start = editor:WordStartPosition(pos, true)
+    local pos_end   = editor:WordEndPosition(pos, true)
     local word = editor:GetTextRange(pos_start, pos_end)
     if #word == 0 then
         -- try to select a non-word under caret
-        pos_start = editor:WordStartPosition(curpos, false)
-        pos_end   = editor:WordEndPosition(curpos, false)
+        pos_start = editor:WordStartPosition(pos, false)
+        pos_end   = editor:WordEndPosition(pos, false)
         word = editor:GetTextRange(pos_start, pos_end)
     end
     return word, pos_start, pos_end
 end
 
 local function GetWord(editor, pos)
-    local word, sel_start, sel_end = Editor.GetSelText(editor)
+    local sel_start, sel_end = editor:GetAnchor(), editor:GetCurrentPos()
     if sel_start ~= sel_end then
+        local word = editor:GetTextRange(math.min(sel_start, sel_end), math.max(sel_start, sel_end))
         return word, true, sel_start, sel_end
     end
-    word, sel_start, sel_end = GetCurrentWord(editor, pos or editor:GetCurrentPos())
-    return word, false, sel_start, sel_end
+    local word, word_start, word_end = GetCurrentWord(editor, pos or editor:GetCurrentPos())
+    return word, false, word_start, word_end
+end
+
+local function GetWortStyle(editor, pos)
+  -- Name allows to select all strings. E.g. for Lua lexer 
+  -- single and double quotes have a different styles.
+  return Editor.GetStyleNameAt(editor, pos)
+  -- return Editor.GetStyleAt(editor, pos)
 end
 
 local function EditorClearMarks(editor, indicator, start, length)
@@ -493,118 +208,233 @@ local function ShowOutput()
   return true
 end
 
-local function DoFindText(editor_, pos, marker)
+local function GetNextFindMarkerNumber(editor)
+  local output = ide:GetOutput()
+
+  local current_mark_number   = INSTALLED_MARKERS[current_marker]
+  local current_mark_settings = FIND_MARKERS[current_marker]
+
+  current_marker = current_marker + 1
+  if current_marker > #INSTALLED_MARKERS then
+    current_marker = 1
+  end
+
+  if current_mark_number then
+    Editor.ConfigureIndicator(editor, current_mark_number, current_mark_settings)
+    Editor.ConfigureIndicator(output, current_mark_number, current_mark_settings)
+  end
+
+  return current_mark_number
+end
+
+local function GetFileName(editor)
+  --! @fixme there no file path for new documents (which not saved on disk)
+  local doc = Editor.GetDocument(editor)
+  local filePath = doc and (doc:GetFilePath() or doc:GetFileName()) or ''
+  return filePath
+end
+
+local function GetFindFlags(editor, word_pos, is_selected)
+  local flags = is_selected and 0 or wx.wxFR_WHOLEWORD
+  if HIGHLIGHT_MATCHCASE then flags = flags + wx.wxFR_MATCHCASE end
+  return flags
+end
+
+local function GetFindParams(editor, pos)
+    local sText, selected, word_start, word_end  = GetWord(editor, pos)
+    if (not sText) or (sText == '') then
+        return
+    end
+
+    local flags       = GetFindFlags(editor, word_start, selected)
+    local word_style
+    if HIGHLIGHT_MATCHSTYLE and not selected then
+        word_style = GetWortStyle(editor, word_start)
+    end
+
+    return sText, flags, selected, word_start, word_style, word_end
+end
+
+local function DoFindText(editor_, pos)
     editor = editor_
 
-    local output = ide:GetOutput()
+    local current_pos = pos or editor:GetCurrentPos()
 
-    local current_mark_number   = INSTALLED_MARKERS[current_marker]
-    local current_mark_settings = FIND_MARKERS[current_marker]
-
-    current_marker = current_marker + 1
-    if current_marker > #INSTALLED_MARKERS then current_marker = 1 end
-
-    if current_mark_number then
-        Editor.ConfigureIndicator(editor, current_mark_number, current_mark_settings)
-        Editor.ConfigureIndicator(output, current_mark_number, current_mark_settings)
+    local sText, flags, selected, word_pos, word_style = GetFindParams(editor, current_pos)
+    if not sText then
+        return
     end
 
-    --! @fixme there no file path for new documents (which not saved on disk)
-    local doc = Editor.GetDocument(editor)
-    local filePath = doc and (doc:GetFilePath() or doc:GetFileName()) or ''
-    local sText, selected, word_pos  = GetWord(editor, pos)
-    local flags = selected and 0 or wx.wxFR_WHOLEWORD
-    if matchcase then flags = flags + wx.wxFR_MATCHCASE end
-    local word_style
-    if matchstyle and not selected then
-        word_style = Editor.GetStyleAt(editor, word_pos)
+    local marker      = GetNextFindMarkerNumber(editor)
+    local filePath    = GetFileName(editor)
+
+    if bookmark then editor:MarkerDeleteAll(bookmark) end
+
+    local output      = ide:GetOutput()
+    if isOutput then
+        local msg
+        if selected then
+            msg = '> '..L'Search for selected text'..': "'
+        else
+            msg = '> '..L'Search for current word'..': "'
+        end
+
+        print(msg .. sText .. '"')
     end
 
-    if sText ~= '' then
-        if bookmark then editor:MarkerDeleteAll(bookmark) end
+    local current_output_line_start, current_editor_line_start
+
+    local count, marked = 0
+    for s, e in Editor.iFindText(editor, sText, flags, nil, nil, word_style) do
+        count = count + 1
+
+        local line = editor:LineFromPosition(s)
+        EditorMarkText(editor, s, e - s, marker)
+        if line ~= marked then
+            marked = line
+            if bookmark then editor:MarkerAdd(line, bookmark) end
+
+            if isOutput then
+                local prefix = filePath .. string.format(':%d:\t', line + 1)
+
+                current_editor_line_start = editor:PositionFromLine(line)
+                -- we always aling output to line start
+                current_output_line_start = output:GetCurrentPos()
+                current_output_line_start = current_output_line_start + #prefix
+
+                local str = editor:GetLine(line) or ''
+                local length = #str
+                str = string.gsub(str, '^%s+', '')
+
+                current_output_line_start = current_output_line_start - (length - #str)
+
+                -- can not remove spaces in the middle of the string because of
+                -- it will change offsets of the words
+                str = string.gsub(str, '%s+$', '')
+                print(prefix .. str)
+            end
+        end
 
         if isOutput then
-            local msg
-            if selected then
-                msg = '> '..L'Search for selected text'..': "'
-            else
-                msg = '> '..L'Search for current word'..': "'
-            end
-
-            print(msg .. sText .. '"')
+            local offset_in_line = s - current_editor_line_start
+            local length = e - s
+            local output_offset = current_output_line_start + offset_in_line
+            EditorMarkText(output, output_offset, length, marker)
         end
-
-        local current_output_line_start
-        local current_editor_line_start
-
-        local count, marked = 0
-        for s, e in Editor.iFindText(editor, sText, flags, nil, nil, word_style) do
-            count = count + 1
-
-            local line = editor:LineFromPosition(s)
-            EditorMarkText(editor, s, e - s, current_mark_number)
-            if line ~= marked then
-                marked = line
-                if bookmark then editor:MarkerAdd(line, bookmark) end
-
-                if isOutput then
-                    local prefix = filePath .. string.format(':%d:\t', line + 1)
-
-                    current_editor_line_start = editor:PositionFromLine(line)
-                    -- we always aling output to line start
-                    current_output_line_start = output:GetCurrentPos()
-                    current_output_line_start = current_output_line_start + #prefix
-
-                    local str = editor:GetLine(line) or ''
-                    local length = #str
-                    str = string.gsub(str, '^%s+', '')
-
-                    current_output_line_start = current_output_line_start - (length - #str)
-
-                    -- can not remove spaces in the middle of the string because of
-                    -- it will change offsets of the words
-                    str = string.gsub(str, '%s+$', '')
-                    print(prefix .. str)
-                end
-            end
-
-            if isOutput then
-                local offset_in_line = s - current_editor_line_start
-                local length = e - s
-                local output_offset = current_output_line_start + offset_in_line
-                EditorMarkText(output, output_offset, length, current_mark_number)
-            end
-        end
-
-        if count > 0 then
-            if isOutput then
-                print('>' .. TR("Found %d instance.", count):format(count))
-                if isTutorial then
-                    --! @todo implement jump by marks/lines
-                    -- print('F3 (Shift+F3) - '..L'Jump by markers' )
-                    -- print('F4 (Shift+F4) - '..L'Jump by lines'   )
-                    print('Ctrl+Alt+C - '..L'Erase all markers'  )
-                end
-            end
-        else
-            print('> '..string.gsub(L"Can't find [@]!", '@', sText))
-        end
-
-        local pos
-        if selected then
-            pos = editor:GetSelectionStart()
-        else
-            pos = editor:GetCurrentPos()
-            pos = editor:WordStartPosition(pos, false)
-        end
-
-        editor:GotoPos(pos)
-
-        ShowOutput()
-
-        output:Show()
-        output:SetFocus()
     end
+
+    if count > 0 then
+        if isOutput then
+            print('>' .. TR("Found %d instance.", count):format(count))
+            if isTutorial then
+                --! @todo implement jump by marks/lines
+                -- print('F3 (Shift+F3) - '..L'Jump by markers' )
+                -- print('F4 (Shift+F4) - '..L'Jump by lines'   )
+                print('Ctrl+Alt+C - '..L'Erase all markers'  )
+            end
+        end
+    else
+        print('> '..string.gsub(L"Can't find [@]!", '@', sText))
+    end
+
+    editor:GotoPos(current_pos)
+
+    ShowOutput()
+
+    output:Show()
+    output:SetFocus()
+end
+
+local function SetNextSelection(editor, skip, start_pos, end_pos)
+    if skip then
+        if editor:GetSelections() <= 1 then
+            Editor.SetSel(editor, start_pos, end_pos)
+        else
+            local index = editor:GetMainSelection()
+            editor:SetSelectionNCaret(index, end_pos)
+            editor:SetSelectionNAnchor(index, start_pos)
+        end
+    else
+        editor:AddSelection(start_pos, end_pos)
+        local index = editor:GetMainSelection()
+        editor:SetSelectionNCaret(index, end_pos)
+        editor:SetSelectionNAnchor(index, start_pos)
+    end
+    editor:ShowRange(end_pos, start_pos)
+end
+
+local goto_context
+
+local function GotoNext(editor_, skip)
+    editor = editor_
+
+    local sText, flags, selected, word_start, word_style, word_end = GetFindParams(editor, pos)
+    if not sText then
+        return
+    end
+
+    local pos = editor:GetCurrentPos()
+
+    local search_start_pos = math.max(word_start, word_end)
+    for s, e in Editor.iFindText(editor, sText, flags, search_start_pos, nil, word_style) do
+        if selected then
+            if word_start <= word_end then
+                SetNextSelection(editor, skip, s, e)
+            else
+                SetNextSelection(editor, skip, e, s)
+            end
+        else
+            local pos = s + (pos - word_start)
+            SetNextSelection(editor, skip, pos, pos)
+        end
+        break
+    end
+end
+
+local function FindAll(editor_)
+    editor = editor_
+
+    local sText, flags, selected, word_start, word_style, word_end = GetFindParams(editor, pos)
+    if not sText then
+        return
+    end
+
+    local first_line = editor:GetFirstVisibleLine()
+    local pos = editor:GetCurrentPos()
+    editor:ClearSelections()
+
+    local main_index
+    for s, e in Editor.iFindText(editor, sText, flags, nil, nil, word_style) do
+        if selected then
+            if pos <= word_start then
+                SetNextSelection(editor, false, e, s)
+            else
+                SetNextSelection(editor, false, s, e)
+            end
+        else
+            local pos = s + (pos - word_start)
+            SetNextSelection(editor, false, pos, pos)
+        end
+        if s <= pos and pos <= e then
+            main_index = editor:GetSelections() - 1
+        end
+    end
+
+    if main_index then
+        editor:SetMainSelection(main_index)
+        editor:SetFirstVisibleLine(first_line)
+    end
+end
+
+local function UndoNext(editor)
+    if editor:GetSelections() <= 1 then
+        return
+    end
+
+    local index = editor:GetMainSelection()
+    editor:DropSelectionN(index)
+    local sel_start, sel_end = editor:GetSelection()
+    editor:ShowRange(sel_end, sel_start)
 end
 
 local function HasMoreThanOne(editor, value, length, flag, style)
@@ -730,8 +560,22 @@ local function CallMarkSelected()
     MarkSelected(editor, indicator)
 end
 
-local CLEAR_HOT_KEY = HotKeyToggle:new'Ctrl-Alt-C'
-local MARK_HOT_KEY  = HotKeyToggle:new'Ctrl-Alt-S'
+local actions = {
+    next       = function() local editor = ide:GetEditorWithFocus() if ide:IsValidCtrl(editor) then GotoNext(editor, false) end end,
+    skip_next  = function() local editor = ide:GetEditorWithFocus() if ide:IsValidCtrl(editor) then GotoNext(editor, true) end end,
+    undo_next  = function() local editor = ide:GetEditorWithFocus() if ide:IsValidCtrl(editor) then UndoNext(editor) end end,
+    find_all   = function() local editor = ide:GetEditorWithFocus() if ide:IsValidCtrl(editor) then FindAll(editor) end end,
+    clear      = function() local editor = ide:GetEditor() if ide:IsValidCtrl(editor) then ClearFindMarks(editor) end end,
+    call       = function() local editor = ide:GetEditor() if ide:IsValidCtrl(editor) then ClearFindMarks(editor) end end,
+}
+
+local keys = {
+    ['Ctrl-Alt-C'         ] = 'clear',
+    ['Ctrl-Alt-S'         ] = 'call',
+    ['Ctrl-J'             ] = 'next',    ['Alt-J'              ] = 'find_all',
+    ['Ctrl-K Ctrl-D'      ] = 'skip_next',
+    ['Ctrl-Shift-D'       ] = 'undo_next',
+}
 
 Package.onRegister = function(package)
     local config = package:GetConfig()
@@ -776,20 +620,19 @@ Package.onRegister = function(package)
         end
     end
 
-    matchstyle = not not findtext.matchstyle
-    matchcase  = not not findtext.matchcase
     bookmark   = findtext.bookmarks
     isOutput   = findtext.output
     isTutorial = findtext.tutorial
     if bookmark == true then bookmark = FINDTEXT.bookmarks end
 
-    CLEAR_HOT_KEY:set(ClearFindMarks)
-    MARK_HOT_KEY:set(CallMarkSelected)
+    for key, handler in pairs(keys) do
+        handler = assert(actions[handler], 'Unsupported action: ' .. tostring(handler))
+        HotKeys:add(package, key, handler)
+    end
 end
 
-Package.onUnRegister = function()
-    MARK_HOT_KEY:unset()
-    CLEAR_HOT_KEY:unset()
+Package.onUnRegister = function(package)
+    HotKeys:close_package(package)
 
     ide:RemoveIndicator(HIGHLIGHT_MARKER)
     for _, indicator in ipairs(INSTALLED_MARKERS) do
@@ -830,7 +673,7 @@ Package.onIdle = function(self)
 
     local word_style
     if HIGHLIGHT_MATCHSTYLE and not is_selected then
-        word_style = Editor.GetStyleAt(editor, select_start)
+        word_style = GetWortStyle(editor, select_start)
     end
 
     local clear = string.find(value,'^%s+$')
@@ -868,35 +711,29 @@ Package.onMenuEditor = function(self, menu, editor, event)
         function() DoFindText(editor, pos) end)
 end
 
-local function key_is(k, t)
-    for i = 1, #t do
-        local c = string.byte(t[i])
-        if k == c then return true end
-    end
-end
-
 Package.onEditorKeyDown = function(self, editor, event)
-    local key = event:GetKeyCode()
-    local mod = event:GetModifiers()
-
-    --@BUG https://trac.wxwidgets.org/ticket/18054
-
-    if mod ~= (wx.wxMOD_CONTROL + wx.wxMOD_ALT) then
+    if event:GetModifiers() ~= 0 then
         return true
     end
 
-    if key_is(key, {'c', 'C', 'с', 'С'}) then
-        ClearFindMarks()
-        return false
+    if event:GetKeyCode() ~= wx.WXK_ESCAPE then
+        return true
     end
 
-    if key_is(key, {'s', 'S', 'ы', 'Ы'}) then
-        CallMarkSelected()
-        return false
+    local n = editor:GetSelections() - 1
+
+    if n <= 0 then
+        return true
     end
+
+    local start_pos, end_pos = editor:GetSelection()
+    if end_pos == editor:GetAnchor() then
+        start_pos, end_pos = end_pos, start_pos
+    end
+    editor:ClearSelections()
+    Editor.SetSel(editor, start_pos, end_pos)
 
     return true
 end
-
 
 return Package
