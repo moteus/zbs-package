@@ -400,22 +400,19 @@ local function GotoNext(editor_, skip)
     local order  = (word_start <= word_end)
 
     local search_start_pos = math.max(word_start, word_end)
-    for s, e in Editor.iFindText(editor, sText, flags, search_start_pos, nil, word_style) do
-        local start_pos, end_pos = CalculateSelectionRange(selected, order, s, e, offset)
-        if not PosInSelection(editor, end_pos) then
-            SetNextSelection(editor, skip, start_pos, end_pos)
-            return
+
+    local function do_find(start_pos, end_pos)
+        for s, e in Editor.iFindText(editor, sText, flags, start_pos, end_pos, word_style) do
+            local start_pos, end_pos = CalculateSelectionRange(selected, order, s, e, offset)
+            if not PosInSelection(editor, end_pos) then
+                SetNextSelection(editor, skip, start_pos, end_pos)
+                return true
+            end
         end
     end
 
-    search_start_pos = math.min(word_start, word_end)
-    for s, e in Editor.iFindText(editor, sText, flags, nil, search_start_pos, word_style) do
-        local start_pos, end_pos = CalculateSelectionRange(selected, order, s, e, offset)
-        if not PosInSelection(editor, end_pos) then
-            SetNextSelection(editor, skip, start_pos, end_pos)
-            return
-        end
-    end
+    return do_find(math.max(word_start, word_end), nil)
+        or do_find(nil, math.min(word_start, word_end))
 end
 
 local function FindAll(editor_)
@@ -436,12 +433,10 @@ local function FindAll(editor_)
     local main_index
     for s, e in Editor.iFindText(editor, sText, flags, nil, nil, word_style) do
         if s <= pos and pos <= e then
-            main_index = editor:GetSelections() - 1
+            main_index = editor:GetSelections()
         end
         local start_pos, end_pos = CalculateSelectionRange(selected, order, s, e, offset)
-        if not PosInSelection(editor, end_pos) then
-            SetNextSelection(editor, skip, start_pos, end_pos)
-        end
+        SetNextSelection(editor, skip, start_pos, end_pos)
     end
 
     if main_index then
