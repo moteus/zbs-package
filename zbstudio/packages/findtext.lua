@@ -387,7 +387,7 @@ local function PosInSelection(editor, pos)
     end
 end
 
-local function GotoNext(editor_, skip)
+local function GotoNext(editor_, skip, forward)
     editor = editor_
 
     local sText, flags, selected, word_start, word_style, word_end = GetFindParams(editor, pos)
@@ -411,8 +411,13 @@ local function GotoNext(editor_, skip)
         end
     end
 
-    return do_find(math.max(word_start, word_end), nil)
-        or do_find(nil, math.min(word_start, word_end))
+    if forward then
+        return do_find(math.max(word_start, word_end), nil)
+            or do_find(nil, math.min(word_start, word_end))
+    end
+
+    return do_find(math.min(word_start, word_end), 0)
+        or do_find(editor:GetTextLength(), math.max(word_start, word_end))
 end
 
 local function FindAll(editor_)
@@ -430,13 +435,19 @@ local function FindAll(editor_)
 
     editor:ClearSelections()
 
+    local first = true
     local main_index
     for s, e in Editor.iFindText(editor, sText, flags, nil, nil, word_style) do
         if s <= pos and pos <= e then
             main_index = editor:GetSelections()
         end
         local start_pos, end_pos = CalculateSelectionRange(selected, order, s, e, offset)
-        SetNextSelection(editor, skip, start_pos, end_pos)
+        if first then
+            Editor.SetSel(editor, start_pos, end_pos)
+            first = false
+        else
+            SetNextSelection(editor, false, start_pos, end_pos)
+        end
     end
 
     if main_index then
@@ -580,9 +591,11 @@ local function CallMarkSelected()
 end
 
 local actions = {
-    next       = function() local editor = ide:GetEditorWithFocus() if ide:IsValidCtrl(editor) then GotoNext(editor, false) end end,
-    skip_next  = function() local editor = ide:GetEditorWithFocus() if ide:IsValidCtrl(editor) then GotoNext(editor, true) end end,
-    undo_next  = function() local editor = ide:GetEditorWithFocus() if ide:IsValidCtrl(editor) then UndoNext(editor) end end,
+    next       = function() local editor = ide:GetEditorWithFocus() if ide:IsValidCtrl(editor) then GotoNext(editor, false, true) end end,
+    prev       = function() local editor = ide:GetEditorWithFocus() if ide:IsValidCtrl(editor) then GotoNext(editor, false, false) end end,
+    skip_next  = function() local editor = ide:GetEditorWithFocus() if ide:IsValidCtrl(editor) then GotoNext(editor, true, true) end end,
+    skip_prev  = function() local editor = ide:GetEditorWithFocus() if ide:IsValidCtrl(editor) then GotoNext(editor, true, false) end end,
+    undo       = function() local editor = ide:GetEditorWithFocus() if ide:IsValidCtrl(editor) then UndoNext(editor) end end,
     find_all   = function() local editor = ide:GetEditorWithFocus() if ide:IsValidCtrl(editor) then FindAll(editor) end end,
     clear      = function() local editor = ide:GetEditor() if ide:IsValidCtrl(editor) then ClearFindMarks(editor) end end,
     call       = function() local editor = ide:GetEditor() if ide:IsValidCtrl(editor) then ClearFindMarks(editor) end end,
@@ -591,12 +604,19 @@ local actions = {
 local keys = {
     ['Ctrl-Alt-C'         ] = 'clear',
     ['Ctrl-Alt-S'         ] = 'call',
-    ['Ctrl-J'             ] = 'next',    ['Alt-J'              ] = 'find_all',
+
+    ['Ctrl-J'             ] = 'next',    ['Ctrl-Shift-J'       ] = 'undo',
     ['Ctrl-K Ctrl-J'      ] = 'skip_next',
-    ['Ctrl-Shift-J'       ] = 'undo_next',
+    ['Alt-J'              ] = 'find_all',
+
+    -- ['Ctrl-K J'           ] = 'skip_prev',
+    -- ['Ctrl-K u'           ] = 'undo',
+
 }
 
 Package.onRegister = function(package)
+    plugin = package
+
     local config = package:GetConfig()
     local findtext = (type(config) == 'table') and config or FINDTEXT
 
@@ -660,6 +680,8 @@ Package.onUnRegister = function(package)
     INSTALLED_MARKERS, HIGHLIGHT_MARKER, FIND_MARKERS,
         HIGHLIGHT_STYLE, RESERVED, RESERVED_WORDS_CACHE = nil
 end
+
+local updateneeded
 
 Package.onEditorUpdateUI = function(self, editor, event)
     if bit.band(event:GetUpdated(), wxstc.wxSTC_UPDATE_SELECTION) > 0 then
