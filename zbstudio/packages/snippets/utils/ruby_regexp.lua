@@ -51,7 +51,6 @@ local function ruby_regexp(last_item, pattern, replacement, options)
 
   if ret ~= 0 then
     log:error('ret code: %d\n%s\n============', ret, stderr)
-    log:error('%s\n============', stderr)
     return ''
   end
 

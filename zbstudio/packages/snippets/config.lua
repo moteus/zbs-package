@@ -14,7 +14,7 @@ local function Color(param)
 end
 
 local SnippetConfig = {
-  DEBUG              = true,
+  DEBUG              = false,
   MARK_SNIPPET       = 4,
   MARK_SNIPPET_COLOR = Color("0x4D9999"),
 }
