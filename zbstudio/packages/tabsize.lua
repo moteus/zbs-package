@@ -1,3 +1,5 @@
+local HotKey = package_require 'hotkeys.manager'
+
 local Package = {
   name = "Set tab size dialog",
   author = "Alexey Melnichuk",
@@ -130,38 +132,6 @@ end
 end
 --------------------------------------------------------------------
 
---------------------------------------------------------------------
-local HotKeyToggle = {} do
-HotKeyToggle.__index = HotKeyToggle
-
-function HotKeyToggle:new(key)
-  local o = setmetatable({key = key}, self)
-  return o
-end
-
-function HotKeyToggle:set(handler)
-  assert(self.id == nil)
-  self.prev = ide:GetHotKey(self.key)
-  self.id = ide:SetHotKey(handler, self.key)
-  return self
-end
-
-function HotKeyToggle:unset()
-  assert(self.id ~= nil)
-  if self.id == ide:GetHotKey(self.key) then
-    if self.prev then
-      ide:SetHotKey(self.prev, self.key)
-    else
-      --! @todo properly remove handler
-      ide:SetHotKey(function()end, self.key)
-    end
-  end
-  self.prev, self.id = nil
-end
-
-end
---------------------------------------------------------------------
-
 local function ShowDialog()
   local editor = ide:GetEditor()
   if not editor then return end
@@ -179,14 +149,12 @@ local function ShowDialog()
   end
 end
 
-local HOT_KEY = HotKeyToggle:new('Ctrl-Shift-I')
-
-Package.onRegister = function()
-  HOT_KEY:set(ShowDialog)
+Package.onRegister = function(package)
+  HotKey:add(package, 'Ctrl-Shift-I', ShowDialog)
 end
 
-Package.onUnRegister = function()
-  HOT_KEY:unset()
+Package.onUnRegister = function(package)
+  HotKey:close_package(package)
 end
 
 return Package

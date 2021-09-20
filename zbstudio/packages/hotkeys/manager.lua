@@ -14,19 +14,19 @@ function Keys.new(class)
   local self = setmetatable({}, class)
 
   self:_reset()
-  self.wait_interval = 5 -- Wait next key
+  self.wait_interval = 30 -- Wait next key
 
   return self
 end
 
 function Keys:_reset()
-  self.packages     = {}
-  self.key_handlers = {}
   self.hot_keys     = {}
-  self.key_nodes    = {}
   self.chain        = ''
+  self.chain_node   = self
   self.last_pos     = nil
   self.last_editor  = nil
+  self.last_time    = nil
+  self._keys        = {}
 end
 
 function Keys:_current_status(editor)
@@ -35,10 +35,15 @@ function Keys:_current_status(editor)
 end
 
 function Keys:clear_chain()
+  if self.chain == '' then
+    return
+  end
   self.chain       = ''
+  self.chain_node  = self
   self.last_time   = nil
   self.last_editor = nil
   self.last_pos    = nil
+  ide:SetStatus('')
 end
 
 function Keys:is_chain_valid(editor)
@@ -64,10 +69,16 @@ function Keys:is_chain_valid(editor)
   return true
 end
 
-function Keys:set_chain(key)
-  self.chain        = key
+function Keys:set_chain(key, node)
+  if self.chain == '' then
+    self.chain = key
+  else
+    self.chain = self.chain .. ':' .. key
+  end
+  self.chain_node   = node
   self.last_time    = os.time()
   self.last_editor, self.last_pos = self:_current_status()
+  ide:SetStatus(self.chain)
 end
 
 function Keys:interval()
@@ -88,30 +99,23 @@ function Keys:handler(key)
     self:clear_chain()
   end
 
-  local full_key = (self.chain == '') and key or (self.chain .. ':' .. key)
-
-  local handler = self.key_handlers[full_key]
-  if handler then
+  for i = 1, 2 do
+    local node = self.chain_node._keys[key]
+    if node then
+      if node.is_last then
+        self:clear_chain()
+      else
+        self:set_chain(key, node)
+      end
+      if node.action then
+        node.action()
+      end
+      return true
+    end
+    if self.chain_node == self then
+      break
+    end
     self:clear_chain()
-    handler()
-    return true
-  end
-
-  if self.key_nodes[full_key] then
-    self:set_chain(full_key)
-    return true
-  end
-
-  handler = self.key_handlers[key]
-  if handler then
-    self:clear_chain()
-    handler()
-    return true
-  end
-
-  if self.key_nodes[key] then
-    self:set_chain(key)
-    return true
   end
 
   self:clear_chain()
@@ -135,6 +139,75 @@ function Keys:get_package_by_key(key)
   end
 end
 
+-- In the single chain actions can be belong to only one package
+-- e.g. if Ctrl-K set by package 1 then only this package can set `Ctrl-K M`
+-- But in package 1 set `Ctrl-K M` then any other package can set `Ctrl-K N`
+-- TODO: Chain interrupt event
+
+local function iter(root)
+  coroutine.yield(root)
+  if root._keys then
+    for _, node in pairs(root._keys) do
+      iter(node)
+    end
+  end
+end
+
+local function key_iterator(root)
+  return coroutine.wrap(iter), root
+end
+
+function Keys:add_node(root, package, key, handler, ide_override, is_last)
+  if KEYMAP[key] and not ide_override then
+    return error(string.format("Fail to set hotkey %s for the package '%s'. Hotkey alrady has action in the IDE config", key, package and package.name or 'UNKNOWN'), 2)
+  end
+
+  local norm_key  = self:normalize_key(key)
+  local full_key  = root.full_key  and root.full_key  .. ':' .. norm_key or norm_key
+  local chain_key = root.chain_key and root.chain_key .. ' ' .. key or key
+
+  local node = root._keys[norm_key] or {
+    is_last   = is_last,
+    full_key  = full_key,
+    norm_key  = norm_key,
+    chain_key = chain_key,
+    key       = key,
+    _keys     = {},
+  }
+
+  if is_last or node.action then
+    for node in key_iterator(node) do
+      if node.action and node.package ~= package then
+        local package_name = node.package.name or 'UNKNOWN'
+        return error(string.format(
+            "Fail to set hotkey %s for the package '%s'. Hotkey '%s' alrady has an action for the package '%s'",
+            key, package and package.name or 'UNKNOWN', node.chain_key , package_name),
+        2)
+      end
+    end
+  end
+
+  if not is_last then
+    node.is_last = false
+  end
+
+  root._keys[norm_key] = node
+
+  if is_last then
+    node.action  = handler
+    node.package = package
+  end
+
+  -- create internal handler
+  if #norm_key > 1 then
+    if not self.hot_keys[norm_key] then
+      self.hot_keys[norm_key] = HotKeyToggle:new(key):set(function() self:handler(norm_key) end)
+    end
+  end
+
+  return node
+end
+
 function Keys:add(package, keys, handler, ide_override)
   assert(handler, 'no handler')
 
@@ -146,74 +219,39 @@ function Keys:add(package, keys, handler, ide_override)
     keys = t
   end
 
-  local full_key
+  local tree = self
   for i, key in ipairs(keys) do
-    if KEYMAP[key] and not ide_override then
-      return error(string.format("Fail to set hotkey %s for the package '%s'. Hotkey alrady has action in the IDE config", key, package and package.name or 'UNKNOWN'), 2)
-    end
+    tree = self:add_node(tree, package, key, handler, ide_override, i == #keys)
+  end
+end
 
-    local is_last = (i == #keys)
-    local norm_key = self:normalize_key(key)
-    if not full_key then
-      full_key = norm_key
+local function remove_key(self, root, key)
+  local node = root._keys[key]
+  local hot_key = self.hot_keys[node.norm_key]
+  if hot_key then
+    hot_key:unset()
+  end
+  root._keys[key] = nil
+end
+
+local function remove_package(self, root, package)
+  for key, node in pairs(root._keys) do
+    if node.package == package then
+      remove_key(self, root, key)
     else
-      full_key = full_key .. ':' .. norm_key
-    end
-
-    if self.key_nodes[full_key] and is_last then -- can not attach action to hot key that is part of chain
-      -- partial key can be defined for multiple packages
-      -- e.g. first package define `Ctrl-K Ctrl-U` and the second one - `Ctrl-K Ctrl-D`
-      -- in this case partial key `Ctrl-K` uses by both packages
-      return error(string.format("Fail to set hotkey %s for the package '%s'. Hotkey alrady used in chain", key, package and package.name or 'UNKNOWN'), 2)
-    end
-
-    if not is_last then -- mark as middle node
-      self.key_nodes[full_key] = true
-    end
-
-    if is_last then
-      if self.key_handlers[full_key] then -- can not update hotkey action
-        local first_package = self:get_package_by_key(full_key)
-        local package_name = first_package and first_package.name or 'UNKNOWN'
-        return error(string.format("Fail to set hotkey %s for the package '%s'. Hotkey alrady has action in the package '%s'", key, package and package.name or 'UNKNOWN', package_name), 2)
+      remove_package(self, node, package)
+      if not next(node._keys) then
+        remove_key(self, root, key)
       end
-      self.key_handlers[full_key] = handler
-    end
-
-    if #norm_key == 1 and not (is_last and i > 1) then
-        return error(string.format("Fail to set hotkey %s for the package '%s'. Single char allowed only as last node in chain", key, package and package.name or 'UNKNOWN'), 2)
-    end
-
-    -- create internal handler
-    if #norm_key > 1 then
-        if not self.hot_keys[norm_key] then
-          self.hot_keys[norm_key] = HotKeyToggle:new(key):set(function() self:handler(norm_key) end)
-        end
-    end
-
-    if is_last then
-      local package_info = self.packages[package]
-      if not package_info then
-        package_info = {full_keys = {}}
-        self.packages[package] = package_info
-      end
-      package_info.full_keys[full_key] = true
     end
   end
 end
 
 function Keys:close_package(package)
-  local package_info = self.packages[package]
-  if not package_info then
-    return
+  assert(package ~= nil)
+  for key, node in pairs(self._keys) do
+    remove_package(self, self, package)
   end
-
-  for full_key in pairs(package_info.full_keys) do
-    self.key_nodes[full_key]    = nil
-    self.key_handlers[full_key] = nil
-  end
-
-  self.packages[package] = nil
 end
 
 function Keys:close()
@@ -254,17 +292,38 @@ function Keys:onEditorKey(editor, event)
 end
 
 function Keys:onEditorKeyDown(editor, event)
-  if self.chain ~= '' then
-    local modifier = event:GetModifiers()
-    if modifier == 0  and event:GetKeyCode() == wx.WXK_ESCAPE then
-      self:clear_chain()
-    end
+  if self.chain == '' then
+    return true
+  end
+
+  local modifier = event:GetModifiers()
+  if modifier == 0 and event:GetKeyCode() == wx.WXK_ESCAPE then
+    self:clear_chain()
+    return true
+  end
+
+  if not self:is_chain_valid() then
+    self:clear_chain()
   end
 
   return true
 end
 
 function Keys:onIdle(editor, event)
+  if self.chain == '' then
+    return
+  end
+
+  if not self:is_chain_valid() then
+    self:clear_chain()
+  end
+end
+
+function Keys:onEditorUpdateUI(editor, event)
+  if self.chain == '' then
+    return
+  end
+
   if not self:is_chain_valid() then
     self:clear_chain()
   end
