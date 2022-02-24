@@ -1,6 +1,6 @@
-local HOT_KEY = 'Ctrl-R'
+local HotKeys = package_require 'hotkeys.manager'
 
-local ID_RELOAD, ID_PREVIEW
+local HOT_KEY = 'Ctrl-R'
 
 local function ReloadCurrentDocument()
   local editor = ide:GetEditor()
@@ -28,22 +28,13 @@ return {
   version = 0.2,
   dependencies = "1.7",
 
-  onRegister = function()
+  onRegister = function(package)
     --! @todo add menu item
     --! @todo get shortcut key from config
-    ID_PREVIEW = ide:GetHotKey(HOT_KEY)
-    ID_RELOAD  = ide:SetHotKey(ReloadCurrentDocument, HOT_KEY)
+    HotKeys:add(package, HOT_KEY, ReloadCurrentDocument)
   end,
 
-  onUnRegister = function()
-    if ID_RELOAD == ide:GetHotKey(HOT_KEY) then
-      if ID_PREVIEW then
-        ide:SetHotKey(ID_PREVIEW, HOT_KEY)
-      else
-        --! @fixme ZBS 1.70 seems do not accept remove hot keys
-        ide:SetHotKey(function()end, HOT_KEY)
-      end
-    end
-    ID_RELOAD, ID_PREVIEW = nil
+  onUnRegister = function(package)
+    HotKeys:close_package(package)
   end,
 }
